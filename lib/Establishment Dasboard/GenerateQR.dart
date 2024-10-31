@@ -1,9 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart'; // Import ScreenUtil package
-import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart'; // QR code package
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 class GenerateQR extends StatefulWidget {
   @override
@@ -11,15 +11,15 @@ class GenerateQR extends StatefulWidget {
 }
 
 class _GenerateQRState extends State<GenerateQR> {
-  int _selectedIndex = 0; // Default selection for bottom navigation bar
+  int _selectedIndex = 0;
   String email = '';
-  String establishmentName = 'Loading...'; // Placeholder text
-  String documentId = ''; // Variable to store the document ID
+  String establishmentName = 'Loading...';
+  String documentId = '';
 
   @override
   void initState() {
     super.initState();
-    fetchData(); // Fetch Firestore data based on email when page loads
+    fetchData();
   }
 
   void _onItemTapped(int index) {
@@ -30,7 +30,7 @@ class _GenerateQRState extends State<GenerateQR> {
     if (index == 1) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => EstablishmentProfile()), // Navigate to EstablishmentProfile
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
       );
     }
   }
@@ -40,38 +40,39 @@ class _GenerateQRState extends State<GenerateQR> {
   }
 
   Future<void> fetchData() async {
-  // Get the current user's email
-  User? user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    email = user.email ?? '';
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      email = user.email ?? '';
 
-    // Fetch the establishment from Firestore using the email
-    QuerySnapshot snapshot = await FirebaseFirestore.instance
-        .collection('establishments')
-        .where('email', isEqualTo: email)
-        .get();
+      // Reference to the Realtime Database
+      DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+      
+      // Query to fetch data based on the user's email
+      DataSnapshot snapshot = await dbRef.orderByChild('email').equalTo(email).get();
 
-    if (mounted) { // Check if the widget is still mounted before calling setState
-      if (snapshot.docs.isNotEmpty) {
+      if (mounted) {
+        if (snapshot.exists) {
+          var establishmentData = Map<String, dynamic>.from(snapshot.value as Map);
+          var firstRecord = establishmentData.values.first;
+
+          setState(() {
+            establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
+            documentId = snapshot.children.first.key ?? ''; // Retrieve document ID
+          });
+        } else {
+          setState(() {
+            establishmentName = 'Establishment not found';
+          });
+        }
+      }
+    } else {
+      if (mounted) {
         setState(() {
-          establishmentName = snapshot.docs.first['establishmentName'] ?? 'No Name Available';
-          documentId = snapshot.docs.first.id; // Store the document ID
-        });
-      } else {
-        setState(() {
-          establishmentName = 'Establishment not found';
+          establishmentName = 'User not logged in';
         });
       }
     }
-  } else {
-    if (mounted) {
-      setState(() {
-        establishmentName = 'User not logged in';
-      });
-    }
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +94,7 @@ class _GenerateQRState extends State<GenerateQR> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: EdgeInsets.all(16.0.w), // Responsive padding
+            padding: EdgeInsets.all(16.0.w),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -124,21 +125,21 @@ class _GenerateQRState extends State<GenerateQR> {
                     Text(
                       'Generate QR',
                       style: TextStyle(
-                        fontSize: 24.sp, // Responsive font size
+                        fontSize: 24.sp,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 40.h), // Responsive height
+                SizedBox(height: 40.h),
                 Container(
                   width: double.infinity,
-                  height: 350.h, // Responsive height
-                  padding: EdgeInsets.all(20.0.w), // Responsive padding inside the white box
+                  height: 350.h,
+                  padding: EdgeInsets.all(20.0.w),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16.r), // Responsive radius
+                    borderRadius: BorderRadius.circular(16.r),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.2),
@@ -151,26 +152,26 @@ class _GenerateQRState extends State<GenerateQR> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       email.isEmpty
-                          ? CircularProgressIndicator() // Show loading until the data is fetched
+                          ? CircularProgressIndicator()
                           : QrImageView(
-                              data: documentId, // Use the document ID for the QR code
+                              data: documentId,
                               version: QrVersions.auto,
-                              size: 200.w, // Responsive size
+                              size: 200.w,
                             ),
-                      SizedBox(height: 20.h), // Space between QR code and text
+                      SizedBox(height: 20.h),
                       Text(
-                        establishmentName, // Display establishment name below QR code
+                        establishmentName,
                         style: TextStyle(
-                          fontSize: 25.sp, // Responsive font size
-                          fontWeight: FontWeight.bold, // Made the text bold
-                          color: Color(0xFF288F13), // Changed color to 0xFF288F13
+                          fontSize: 25.sp,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF288F13),
                         ),
-                        textAlign: TextAlign.center, // Center the text inside the box
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
-                SizedBox(height: 40.h), // Responsive height
+                SizedBox(height: 40.h),
               ],
             ),
           ),

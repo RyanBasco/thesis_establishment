@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EditProfile.dart';
-import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart'; // Import EditProfile page
+import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
 
 class EstablishmentProfile extends StatefulWidget {
   @override
@@ -21,30 +21,36 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
   }
 
   void fetchEstablishmentName() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      String email = user.email ?? '';
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('establishments')
-          .where('email', isEqualTo: email)
-          .get();
+  User? user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    String email = user.email ?? '';
 
-      if (snapshot.docs.isNotEmpty) {
-        setState(() {
-          establishmentName =
-              snapshot.docs.first['establishmentName'] ?? 'No Name Available';
-        });
-      } else {
-        setState(() {
-          establishmentName = 'Establishment not found';
-        });
-      }
+    // Reference to Firebase Realtime Database
+    DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+
+    // Fetch establishment based on the email using a query
+    DatabaseEvent event = await dbRef.orderByChild('email').equalTo(email).once();
+
+    if (event.snapshot.exists) {
+      // Safely convert the snapshot value to Map<String, dynamic>
+      var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
+      var firstRecord = Map<String, dynamic>.from(establishmentData.values.first as Map);
+
+      setState(() {
+        establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
+      });
     } else {
       setState(() {
-        establishmentName = 'User not logged in';
+        establishmentName = 'Establishment not found';
       });
     }
+  } else {
+    setState(() {
+      establishmentName = 'User not logged in';
+    });
   }
+}
+
 
   void _onItemTapped(int index) {
     setState(() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Analytics.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/GenerateQR.dart';
@@ -16,68 +16,71 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  int _selectedIndex = 0; // Default to Community
-  String _searchQuery = ""; // State for search query
-  String establishmentName = 'Loading...'; // Placeholder for establishment name
+  int _selectedIndex = 0;
+  String _searchQuery = "";
+  String establishmentName = 'Loading...';
 
-  // Define the data for the boxes
   final List<Map<String, dynamic>> _boxes = [
     {'title': 'Scan QR', 'icon': Icons.qr_code},
     {'title': 'Generate QR', 'icon': Icons.qr_code_scanner},
     {'title': 'Records', 'icon': Icons.receipt},
+    {'title': 'Sale', 'icon': Icons.store}, // Changed icon to represent "Sale"
     {'title': 'Review', 'icon': Icons.announcement},
-    {'title': 'Analytics', 'icon': Icons.analytics},
   ];
 
   @override
   void initState() {
     super.initState();
-    fetchEstablishmentName(); // Fetch establishment name on init
+    fetchEstablishmentName();
   }
 
   void fetchEstablishmentName() async {
-  User? user = FirebaseAuth.instance.currentUser;
+    User? user = FirebaseAuth.instance.currentUser;
 
-  if (user != null) {
-    // Refresh the user session to ensure you have the latest email
-    await user.reload();
-    User? refreshedUser = FirebaseAuth.instance.currentUser; // Get the refreshed user
+    if (user != null) {
+      await user.reload();
+      User? refreshedUser = FirebaseAuth.instance.currentUser;
+      String email = refreshedUser?.email ?? '';
+      print('Fetching establishment for email: $email');
 
-    String email = refreshedUser?.email ?? '';
-    print('Fetching establishment for email: $email'); // Debugging line
+      try {
+        // Reference to the Realtime Database
+        DatabaseReference dbRef =
+            FirebaseDatabase.instance.ref('establishments');
 
-    try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('establishments')
-          .where('email', isEqualTo: email)
-          .get();
+        // Retrieve data where email matches
+        DatabaseEvent event =
+            await dbRef.orderByChild('email').equalTo(email).once();
 
-      if (snapshot.docs.isNotEmpty) {
-        var establishmentData = snapshot.docs.first.data() as Map<String, dynamic>;
+        if (event.snapshot.exists) {
+          // Since we're expecting one match, take the first entry
+          var establishmentData =
+              Map<String, dynamic>.from(event.snapshot.value as Map);
+          var firstRecord = establishmentData.values.first;
+
+          setState(() {
+            establishmentName =
+                firstRecord['establishmentName'] ?? 'No Name Available';
+          });
+          print('Establishment name found: $establishmentName');
+        } else {
+          setState(() {
+            establishmentName = 'Establishment not found';
+          });
+          print('No establishment found for this email.');
+        }
+      } catch (e) {
         setState(() {
-          establishmentName = establishmentData['establishmentName'] ?? 'No Name Available';
+          establishmentName = 'Error fetching establishment';
         });
-        print('Establishment name found: $establishmentName'); // Debugging line
-      } else {
-        setState(() {
-          establishmentName = 'Establishment not found';
-        });
-        print('No establishment found for this email.'); // Debugging line
+        print('Error fetching establishment: $e');
       }
-    } catch (e) {
+    } else {
       setState(() {
-        establishmentName = 'Error fetching establishment';
+        establishmentName = 'User not logged in';
       });
-      print('Error fetching establishment: $e'); // Debugging line
     }
-  } else {
-    setState(() {
-      establishmentName = 'User not logged in';
-    });
   }
-}
-
-
 
   void _onItemTapped(int index) {
     setState(() {
@@ -87,7 +90,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (index == 1) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => EstablishmentProfile()), // Navigate to EstablishmentProfile
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
       );
     }
   }
@@ -101,41 +104,40 @@ class _DashboardPageState extends State<DashboardPage> {
   void _navigateToScanQR(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ScanQR()), // Navigate to ScanQR page
+      MaterialPageRoute(builder: (context) => ScanQR()),
     );
   }
 
   void _navigateToGenerateQR(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => GenerateQR()), // Navigate to GenerateQR page
+      MaterialPageRoute(builder: (context) => GenerateQR()),
     );
   }
 
-   void _navigateToRecords(BuildContext context) {
+  void _navigateToRecords(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ClickPage()), // Navigate to Review page
+      MaterialPageRoute(builder: (context) => ClickPage()),
     );
   }
 
   void _navigateToReview(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => Review()), // Navigate to Review page
+      MaterialPageRoute(builder: (context) => Review()),
     );
   }
 
   void _navigateToAnalytics(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => Analytics()), // Navigate to ScanQR page
+      MaterialPageRoute(builder: (context) => Analytics()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Filter boxes based on search query
     final filteredBoxes = _boxes.where((box) {
       return box['title']!.toLowerCase().contains(_searchQuery);
     }).toList();
@@ -163,12 +165,12 @@ class _DashboardPageState extends State<DashboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween, // Align name and icon horizontally
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Padding(
                       padding: EdgeInsets.only(top: 2.h),
                       child: Text(
-                        establishmentName, // Display fetched establishment name
+                        establishmentName,
                         style: TextStyle(
                           fontSize: 18.sp,
                           fontWeight: FontWeight.bold,
@@ -177,7 +179,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.notifications, color: Colors.black, size: 40.sp),
+                      icon: Icon(Icons.notifications,
+                          color: Colors.black, size: 40.sp),
                       onPressed: () {
                         // Handle bell icon press
                       },
@@ -204,7 +207,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       hintText: 'Search...',
                       hintStyle: TextStyle(color: Colors.black),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 16.w),
+                      contentPadding: EdgeInsets.symmetric(
+                          vertical: 14.h, horizontal: 16.w),
                     ),
                     style: TextStyle(color: Colors.black),
                   ),
@@ -216,14 +220,13 @@ class _DashboardPageState extends State<DashboardPage> {
                       if (box['title'] == 'Scan QR') {
                         _navigateToScanQR(context);
                       } else if (box['title'] == 'Generate QR') {
-                        _navigateToGenerateQR(context); // Navigate to GenerateQR
-                      }  else if (box['title'] == 'Records') {
-                        _navigateToRecords(context); // Navigate to Review
+                        _navigateToGenerateQR(context);
+                      } else if (box['title'] == 'Records') {
+                        _navigateToRecords(context);
                       } else if (box['title'] == 'Review') {
-                        _navigateToReview(context); // Navigate to Review
-                      }
-                      else if (box['title'] == 'Analytics') {
-                        _navigateToAnalytics(context); // Navigate to Review
+                        _navigateToReview(context);
+                      } else if (box['title'] == 'Analytics') {
+                        _navigateToAnalytics(context);
                       }
                     },
                     child: Container(
@@ -253,7 +256,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              box['icon'], // Dynamic icon
+                              box['icon'],
                               color: Colors.white,
                               size: 50.sp,
                             ),
@@ -295,12 +298,14 @@ class _DashboardPageState extends State<DashboardPage> {
         onTap: _onItemTapped,
         items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.groups_3_outlined, color: _selectedIndex == 0 ? Color(0xFF288F13) : Colors.black),
+            icon: Icon(Icons.groups_3_outlined,
+                color: _selectedIndex == 0 ? Color(0xFF288F13) : Colors.black),
             label: 'Community',
             backgroundColor: Colors.white,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person, color: _selectedIndex == 1 ? Color(0xFF288F13) : Colors.black),
+            icon: Icon(Icons.person,
+                color: _selectedIndex == 1 ? Color(0xFF288F13) : Colors.black),
             label: 'Personal',
             backgroundColor: Colors.white,
           ),

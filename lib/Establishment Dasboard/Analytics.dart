@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 /// Define the ChartData class
 class ChartData {
@@ -23,6 +24,7 @@ class _AnalyticsState extends State<Analytics> {
   bool isLoading = true;
   String? userEmail;
   String? establishmentDocId; // To store establishment document ID
+  int _selectedIndex = 0; // For bottom navigation bar
 
   @override
   void initState() {
@@ -33,29 +35,29 @@ class _AnalyticsState extends State<Analytics> {
   Future<void> fetchUserEmail() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      if (mounted) {
-        setState(() {
-          userEmail = user.email;
-        });
-      }
+      setState(() {
+        userEmail = user.email;
+      });
       fetchEstablishmentDocId(); // Fetch establishment doc ID
     }
   }
 
   Future<void> fetchEstablishmentDocId() async {
-    // Query to get the establishment document ID based on user's email
-    QuerySnapshot establishmentSnapshot = await FirebaseFirestore.instance
-        .collection('establishments')
-        .where('email', isEqualTo: userEmail) // Filter by email
-        .get();
+    DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+    DatabaseEvent establishmentEvent = await dbRef.orderByChild('email').equalTo(userEmail).once();
 
-    if (establishmentSnapshot.docs.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          establishmentDocId = establishmentSnapshot.docs.first.id; // Get the first document ID
-        });
-      }
+    if (establishmentEvent.snapshot.exists) {
+      var establishmentData = Map<String, dynamic>.from(establishmentEvent.snapshot.value as Map);
+      var firstRecord = establishmentData.keys.first; // Get the first matching key as document ID
+
+      setState(() {
+        establishmentDocId = firstRecord;
+      });
       fetchTotalSpendData(); // Fetch TotalSpend data based on establishment ID
+    } else {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
@@ -67,81 +69,82 @@ class _AnalyticsState extends State<Analytics> {
   Future<void> fetchTotalSpendData() async {
     if (establishmentDocId == null) return;
 
-    QuerySnapshot visitsSnapshot = await FirebaseFirestore.instance
-        .collection('Visits')
-        .get(); // Fetch all documents in Visits collection
+    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+    DatabaseEvent visitsEvent = await visitsRef.once();
 
     Map<String, double> spendByDate = {}; // Map to aggregate spend by date
 
-    for (var doc in visitsSnapshot.docs) {
-      var data = doc.data() as Map<String, dynamic>;
+    if (visitsEvent.snapshot.exists) {
+      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-      // Check if EstablishmentId matches the logged-in establishment's document ID
-      if (data['EstablishmentID'] == establishmentDocId) {
-        double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+      for (var entry in visitsData.entries) {
+        var data = Map<String, dynamic>.from(entry.value); // Safely cast to Map<String, dynamic>
 
+        if (data['EstablishmentID'] == establishmentDocId) {
+          double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
 
-        DateTime date;
-        if (data['Date'] is Timestamp) {
-          Timestamp dateTimestamp = data['Date'];
-          date = dateTimestamp.toDate();
-        } else if (data['Date'] is String) {
-          String dateString = data['Date'];
-          try {
-            date = DateFormat('yyyy-MM-dd').parse(dateString);
-          } catch (e) {
+          DateTime date;
+          if (data['Date'] is String) {
+            String dateString = data['Date'];
+            try {
+              date = DateFormat('yyyy-MM-dd').parse(dateString);
+            } catch (e) {
+              date = DateTime.now();
+            }
+          } else {
             date = DateTime.now();
           }
-        } else {
-          date = DateTime.now();
-        }
 
-        String formattedDate;
-        if (selectedOption == 'Yearly') {
-          formattedDate = DateFormat('yyyy').format(date);
-        } else if (selectedOption == 'Monthly') {
-          formattedDate = DateFormat('MMMM yyyy').format(date);
-        } else if (selectedOption == 'Weekly') {
-          int weekNumber = getWeekOfYear(date);
-          formattedDate = 'Week $weekNumber, ${date.year}';
-        } else if (selectedOption == 'Daily') {
-          if (date.day == DateTime.now().day &&
-              date.month == DateTime.now().month &&
-              date.year == DateTime.now().year) {
-            formattedDate = DateFormat('MMMM dd, yyyy').format(date);
+          String formattedDate;
+          if (selectedOption == 'Yearly') {
+            formattedDate = DateFormat('yyyy').format(date);
+          } else if (selectedOption == 'Monthly') {
+            formattedDate = DateFormat('MMMM yyyy').format(date);
+          } else if (selectedOption == 'Weekly') {
+            int weekNumber = getWeekOfYear(date);
+            formattedDate = 'Week $weekNumber, ${date.year}';
+          } else if (selectedOption == 'Daily') {
+            if (date.day == DateTime.now().day &&
+                date.month == DateTime.now().month &&
+                date.year == DateTime.now().year) {
+              formattedDate = DateFormat('MMMM dd, yyyy').format(date);
+            } else {
+              continue;
+            }
           } else {
-            continue; // Skip if the date is not today
+            formattedDate = DateFormat('MMMM dd, yyyy').format(date);
           }
-        } else {
-          formattedDate = DateFormat('MMMM dd, yyyy').format(date);
-        }
 
-        // Accumulate TotalSpend by date
-        if (spendByDate.containsKey(formattedDate)) {
-          spendByDate[formattedDate] = spendByDate[formattedDate]! + totalSpend;
-        } else {
-          spendByDate[formattedDate] = totalSpend;
+          if (spendByDate.containsKey(formattedDate)) {
+            spendByDate[formattedDate] = spendByDate[formattedDate]! + totalSpend;
+          } else {
+            spendByDate[formattedDate] = totalSpend;
+          }
         }
       }
     }
 
-    if (mounted) {
-      // Convert the map data to ChartData format for the chart
-      List<ChartData> fetchedData = spendByDate.entries
-          .map((entry) => ChartData(entry.key, entry.value))
-          .toList();
+    List<ChartData> fetchedData = spendByDate.entries
+        .map((entry) => ChartData(entry.key, entry.value))
+        .toList();
 
-      setState(() {
-        chartData = fetchedData;
-        isLoading = false;
-      });
-    }
+    setState(() {
+      chartData = fetchedData;
+      isLoading = false;
+    });
   }
 
-  @override
-  void dispose() {
-    // Clean up any resources like listeners here if necessary.
-    super.dispose();
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
+      );
+    }
   }
 
   @override
@@ -275,10 +278,8 @@ class _AnalyticsState extends State<Analytics> {
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (int index) {
-          // Add navigation logic if needed
-        },
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(

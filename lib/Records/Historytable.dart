@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
 
 class History extends StatefulWidget {
@@ -21,81 +21,81 @@ class _HistoryState extends State<History> {
   Future<void> fetchUserDocumentId() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('establishments')
-          .where('email', isEqualTo: user.email)
-          .get();
+      // Query to get the document ID based on user's email in Realtime Database
+      DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
 
-      if (snapshot.docs.isNotEmpty) {
-        setState(() {
-          userDocId = snapshot.docs.first.id;
-        });
+      if (event.snapshot.exists) {
+        var data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        userDocId = data.keys.first; // Get the first matching document ID
         fetchVisitRecords();
       }
     }
   }
 
   Future<void> fetchVisitRecords() async {
-  if (userDocId == null) return;
+    if (userDocId == null) return;
 
-  QuerySnapshot visitsSnapshot = await FirebaseFirestore.instance
-      .collection('Visits')
-      .where('EstablishmentID', isEqualTo: userDocId)
-      .get();
+    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+    DatabaseEvent visitsEvent = await visitsRef.orderByChild('EstablishmentID').equalTo(userDocId).once();
 
-  DateFormat dateFormat1 = DateFormat('yyyy-MM-dd');
-  DateFormat dateFormat2 = DateFormat('yyyy-M-d');
+    DateFormat dateFormat1 = DateFormat('yyyy-MM-dd');
+    DateFormat dateFormat2 = DateFormat('yyyy-M-d');
 
-  List<Map<String, dynamic>> records = [];
-  for (var doc in visitsSnapshot.docs) {
-    var data = doc.data() as Map<String, dynamic>;
+    List<Map<String, dynamic>> records = [];
+    if (visitsEvent.snapshot.exists) {
+      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-    DateTime date;
-    if (data['Date'] is Timestamp) {
-      date = (data['Date'] as Timestamp).toDate();
-    } else if (data['Date'] is String) {
-      try {
-        date = dateFormat1.parse(data['Date']);
-      } catch (e) {
-        try {
-          date = dateFormat2.parse(data['Date']);
-        } catch (e) {
+      for (var entry in visitsData.entries) {
+        var data = Map<String, dynamic>.from(entry.value);
+
+        DateTime date;
+        if (data['Date'] is String) {
+          try {
+            date = dateFormat1.parse(data['Date']);
+          } catch (e) {
+            try {
+              date = dateFormat2.parse(data['Date']);
+            } catch (e) {
+              date = DateTime.now();
+            }
+          }
+        } else {
           date = DateTime.now();
         }
+
+        String category = data['Category'] ?? 'N/A';
+        double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+        String uid = data['UID'];
+
+        DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
+        DatabaseEvent userEvent = await userRef.once();
+        String firstName = 'Unknown';
+        String lastName = 'Unknown';
+
+        if (userEvent.snapshot.exists) {
+          var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+          firstName = userData['first_name'] ?? 'Unknown';
+          lastName = userData['last_name'] ?? 'Unknown';
+        }
+
+        String fullName = '$firstName $lastName';
+
+        records.add({
+          'Name': fullName,
+          'Category': category,
+          'Date': date,
+          'TotalSpend': totalSpend,
+        });
       }
-    } else {
-      date = DateTime.now();
     }
 
-    String category = data['Category'] ?? 'N/A';
-    double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
-
-    String uid = data['UID'];
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance
-        .collection('Users')
-        .doc(uid)
-        .get();
-
-    String firstName = userDoc['first_name'] ?? 'Unknown';
-    String lastName = userDoc['last_name'] ?? 'Unknown';
-    String fullName = '$firstName $lastName';
-
-    records.add({
-      'Name': fullName,
-      'Category': category,
-      'Date': date,
-      'TotalSpend': totalSpend,
-    });
+    if (mounted) {
+      setState(() {
+        visitRecords = records;
+      });
+    }
   }
-
-  // Ensure widget is still mounted before calling setState
-  if (mounted) {
-    setState(() {
-      visitRecords = records;
-    });
-  }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -118,8 +118,7 @@ class _HistoryState extends State<History> {
               ),
             ),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -160,100 +159,112 @@ class _HistoryState extends State<History> {
                     child: visitRecords.isEmpty
                         ? const Center(child: CircularProgressIndicator())
                         : SingleChildScrollView(
-                            child: Container(
-                              color: Colors.white, // White background for the table
-                              child: Table(
-                                border: TableBorder.all(color: Colors.black54),
-                                columnWidths: const {
-                                  0: FlexColumnWidth(2),
-                                  1: FlexColumnWidth(2),
-                                  2: FlexColumnWidth(2),
-                                  3: FlexColumnWidth(3),
-                                  4: FlexColumnWidth(2),
-                                },
-                                children: [
-                                  TableRow(
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black12,
-                                    ),
-                                    children: const [
-                                      Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text(
-                                          'Name',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: Container(
+                                color: Colors.white, // White background for the table
+                                padding: const EdgeInsets.all(8.0),
+                                child: Table(
+                                  border: TableBorder.all(color: Colors.black54),
+                                  columnWidths: const {
+                                    0: FixedColumnWidth(150),
+                                    1: FixedColumnWidth(120),
+                                    2: FixedColumnWidth(100),
+                                    3: FixedColumnWidth(100),
+                                    4: FixedColumnWidth(100),
+                                  },
+                                  children: [
+                                    TableRow(
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black12,
                                       ),
-                                      Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text(
-                                          'Category',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text(
-                                          'Date',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text(
-                                          'Time',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text(
-                                          'Total Spend',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  ...visitRecords.map(
-                                    (record) => TableRow(
-                                      children: [
+                                      children: const [
                                         Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Text(record['Name'] ?? 'Unknown'),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Text(record['Category']),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.all(8.0),
+                                          padding: EdgeInsets.all(8.0),
                                           child: Text(
-                                            DateFormat('yyyy-MM-dd')
-                                                .format(record['Date']),
+                                            'Name',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
                                           ),
                                         ),
                                         Padding(
-                                          padding: const EdgeInsets.all(8.0),
+                                          padding: EdgeInsets.all(8.0),
                                           child: Text(
-                                            DateFormat('hh:mm a')
-                                                .format(record['Date']),
+                                            'Category',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
                                           ),
                                         ),
                                         Padding(
-                                          padding: const EdgeInsets.all(8.0),
+                                          padding: EdgeInsets.all(8.0),
                                           child: Text(
-                                            '₱${record['TotalSpend'].toStringAsFixed(2)}', // Changed to pesos
+                                            'Date',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: EdgeInsets.all(8.0),
+                                          child: Text(
+                                            'Time',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: EdgeInsets.all(8.0),
+                                          child: Text(
+                                            'Total Spend',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ],
+                                    ...visitRecords.map(
+                                      (record) => TableRow(
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              record['Name'] ?? 'Unknown',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              record['Category'],
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              DateFormat('yyyy-MM-dd').format(record['Date']),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              DateFormat('hh:mm a').format(record['Date']),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              '₱${record['TotalSpend'].toStringAsFixed(2)}',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

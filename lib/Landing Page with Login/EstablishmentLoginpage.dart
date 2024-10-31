@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+import 'package:firebase_database/firebase_database.dart'; // Import Realtime Database
 import 'package:flutter/material.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentSignuppage.dart';
@@ -14,28 +14,26 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  bool _obscurePassword = true; // For toggling password visibility
+  bool _obscurePassword = true;
 
   // Function to handle login
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null; // Clear any previous error messages
+      _errorMessage = null;
     });
 
     try {
-      // Check if the email exists in Firestore
-      final QuerySnapshot result = await FirebaseFirestore.instance
-          .collection('establishments')
-          .where('email', isEqualTo: _emailController.text)
-          .get();
+      // Check if the email exists in Realtime Database
+      DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(_emailController.text).once();
 
-      if (result.docs.isEmpty) {
+      if (!event.snapshot.exists) {
         setState(() {
           _errorMessage = 'Invalid Email or Password.';
           _isLoading = false;
         });
-        return; // Exit if no establishment is found
+        return;
       }
 
       // Sign in with Firebase Authentication
@@ -58,14 +56,13 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
         } else {
           _errorMessage = 'An error occurred. Please try again.';
         }
-        _isLoading = false; // Stop the loading spinner
+        _isLoading = false;
       });
     }
   }
 
   @override
   void dispose() {
-    // Dispose controllers to avoid memory leaks
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -93,7 +90,7 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
           child: SingleChildScrollView(
             physics: ClampingScrollPhysics(),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 80.0, 16.0, 16.0), // Adjust this value to move down
+              padding: const EdgeInsets.fromLTRB(16.0, 80.0, 16.0, 16.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,8 +99,6 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                     child: Image.asset('assets/building.png', height: 150),
                   ),
                   SizedBox(height: 40),
-
-                  // "Login" Text
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
@@ -111,16 +106,14 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF288F13), // Color #288F13
+                        color: Color(0xFF288F13),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Email Field with Icon
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF288F13), // Background color for email field
+                      color: const Color(0xFF288F13),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: TextField(
@@ -129,18 +122,16 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                         labelText: 'Email',
                         labelStyle: TextStyle(color: Colors.white),
                         border: InputBorder.none,
-                        prefixIcon: Icon(Icons.email, color: Colors.white), // Email Icon
+                        prefixIcon: Icon(Icons.email, color: Colors.white),
                       ),
                       keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(color: Colors.white), // White text inside
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Password Field with Eye Icon
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF288F13), // Background color for password field
+                      color: const Color(0xFF288F13),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: TextField(
@@ -150,7 +141,7 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                         labelText: 'Password',
                         labelStyle: const TextStyle(color: Colors.white),
                         border: InputBorder.none,
-                        prefixIcon: const Icon(Icons.lock, color: Colors.white), // Lock Icon
+                        prefixIcon: const Icon(Icons.lock, color: Colors.white),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -158,17 +149,15 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                           ),
                           onPressed: () {
                             setState(() {
-                              _obscurePassword = !_obscurePassword; // Toggle password visibility
+                              _obscurePassword = !_obscurePassword;
                             });
                           },
                         ),
                       ),
-                      style: const TextStyle(color: Colors.white), // White text inside
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // Error message if any
                   if (_errorMessage != null)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -177,33 +166,29 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
                         style: const TextStyle(color: Colors.red),
                       ),
                     ),
-
-                  // Forgot password? text
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8.0),
                     child: Text(
                       'Forgot password?',
                       style: TextStyle(
-                        color: Colors.black, // Black text color
+                        color: Colors.black,
                       ),
                     ),
                   ),
                   SizedBox(height: 40),
-
-                  // Login Button with loading indicator
                   Center(
                     child: _isLoading
-                        ? const CircularProgressIndicator() // Show loading spinner when signing in
+                        ? const CircularProgressIndicator()
                         : ElevatedButton(
-                            onPressed: _login, // Call the login function
+                            onPressed: _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF288F13), // Button color
-                              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15), // Increased size
+                              backgroundColor: const Color(0xFF288F13),
+                              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
                             ),
                             child: const Text(
                               'Login',
                               style: TextStyle(
-                                color: Colors.white, // Button text color
+                                color: Colors.white,
                                 fontSize: 18,
                               ),
                             ),

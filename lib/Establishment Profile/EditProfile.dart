@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class EditProfile extends StatefulWidget {
   const EditProfile({Key? key}) : super(key: key);
@@ -29,30 +29,20 @@ class _EditProfileState extends State<EditProfile> {
     _fetchEstablishmentData();
   }
 
-
   Future<void> _fetchEstablishmentData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        var querySnapshot = await FirebaseFirestore.instance
-            .collection('establishments')
-            .where('email', isEqualTo: user.email)
-            .get();
+        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+        DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
 
-        if (querySnapshot.docs.isNotEmpty) {
-          var data = querySnapshot.docs.first.data();
-          _updateControllers(data);
+        if (event.snapshot.exists) {
+          var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
+          var firstRecord = Map<String, dynamic>.from(establishmentData.values.first);
+
+          _updateControllers(firstRecord);
         } else {
-          var doc = await FirebaseFirestore.instance
-              .collection('establishments')
-              .doc(user.uid)
-              .get();
-
-          if (doc.exists) {
-            _updateControllers(doc.data() as Map<String, dynamic>);
-          } else {
-            print('Establishment data not found for user.');
-          }
+          print('Establishment data not found for user.');
         }
       } catch (e) {
         print('Failed to fetch establishment data: $e');
@@ -82,10 +72,8 @@ class _EditProfileState extends State<EditProfile> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        await FirebaseFirestore.instance
-            .collection('establishments')
-            .doc(user.uid)
-            .update({
+        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments/${user.uid}');
+        await dbRef.update({
           'establishmentName': _establishmentNameController.text,
           'tourismType': _tourismTypeController.text,
           'barangay': _barangayController.text,
@@ -183,7 +171,6 @@ class _EditProfileState extends State<EditProfile> {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // Black circle with profile icon
                         Positioned(
                           top: 25,
                           left: 120,
@@ -201,7 +188,6 @@ class _EditProfileState extends State<EditProfile> {
                             ),
                           ),
                         ),
-                        // Grey circle with camera icon
                         Positioned(
                           top: 80,
                           left: 190,
@@ -219,7 +205,6 @@ class _EditProfileState extends State<EditProfile> {
                             ),
                           ),
                         ),
-                        // Profile information fields
                         Positioned(
                           left: 20,
                           top: 140,
@@ -233,7 +218,6 @@ class _EditProfileState extends State<EditProfile> {
                                 enabled: _isEditing,
                               ),
                               const SizedBox(height: 20),
-                              // Tourism Type Field
                               _isEditing
                                   ? DropdownButtonFormField<String>(
                                       value: _tourismType.isNotEmpty && ['primary', 'secondary'].contains(_tourismType)
@@ -278,66 +262,58 @@ class _EditProfileState extends State<EditProfile> {
                                 enabled: _isEditing,
                               ),
                               const SizedBox(height: 20),
-                              // Subcategory Field
-                            // Subcategory Field
-_isEditing
-    ? ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: 60,
-        ),
-        child: DropdownButtonFormField<String>(
-          value: _subCategory.isNotEmpty &&
-                  [
-                    'Accomodation Establishments',
-                    'Travel and Tour Services',
-                    'Tourist Transport Operators',
-                    'Meetings, Incentives, Conventions and Exhibitions (MICE)',
-                    'Adventure/ Sports and Ecotourism Facilities',
-                    'Tourism Frontliner'
-                  ].contains(_subCategory)
-              ? _subCategory
-              : null,
-          items: [
-            'Accomodation Establishments',
-            'Travel and Tour Services',
-            'Tourist Transport Operators',
-            'Meetings, Incentives, Conventions and Exhibitions (MICE)',
-            'Adventure/ Sports and Ecotourism Facilities',
-            'Tourism Frontliner'
-          ]
-              .map((category) => DropdownMenuItem(
-                    value: category,
-                    child: Text(category),
-                  ))
-              .toList(),
-          onChanged: (value) {
-            setState(() {
-              _subCategory = value ?? '';
-              _subCategoryController.text = _subCategory;
-            });
-          },
-          decoration: InputDecoration(
-            labelText: 'Subcategory',
-            labelStyle: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Color(0xFF2C812A),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: Colors.grey[300],
-          ),
-        ),
-      )
-    : _buildTextField(
-        labelText: 'Subcategory',
-        controller: _subCategoryController,
-        enabled: false,
-      ),
-
+                              _isEditing
+                                  ? DropdownButtonFormField<String>(
+                                      value: _subCategory.isNotEmpty &&
+                                              [
+                                                'Accommodation Establishments',
+                                                'Travel and Tour Services',
+                                                'Tourist Transport Operators',
+                                                'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+                                                'Adventure/ Sports and Ecotourism Facilities',
+                                                'Tourism Frontliner'
+                                              ].contains(_subCategory)
+                                          ? _subCategory
+                                          : null,
+                                      items: [
+                                        'Accommodation Establishments',
+                                        'Travel and Tour Services',
+                                        'Tourist Transport Operators',
+                                        'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+                                        'Adventure/ Sports and Ecotourism Facilities',
+                                        'Tourism Frontliner'
+                                      ]
+                                          .map((category) => DropdownMenuItem(
+                                                value: category,
+                                                child: Text(category),
+                                              ))
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _subCategory = value ?? '';
+                                          _subCategoryController.text = _subCategory;
+                                        });
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Subcategory',
+                                        labelStyle: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                          color: Color(0xFF2C812A),
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey[300],
+                                      ),
+                                    )
+                                  : _buildTextField(
+                                      labelText: 'Subcategory',
+                                      controller: _subCategoryController,
+                                      enabled: false,
+                                    ),
                               const SizedBox(height: 20),
                               _buildTextField(
                                 labelText: 'Email',
@@ -345,7 +321,6 @@ _isEditing
                                 enabled: false,
                               ),
                               const SizedBox(height: 20),
-                              // Edit Button
                               if (!_isEditing)
                                 ElevatedButton(
                                   onPressed: () {
@@ -360,13 +335,8 @@ _isEditing
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Color(0xFF288F13),
                                     padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.zero,
-                                    ),
                                   ),
                                 ),
-
-                              // Cancel and Save Buttons
                               if (_isEditing)
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -391,9 +361,6 @@ _isEditing
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.red,
                                         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.zero,
-                                        ),
                                       ),
                                     ),
                                     ElevatedButton(
@@ -405,9 +372,6 @@ _isEditing
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Color(0xFF288F13),
                                         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.zero,
-                                        ),
                                       ),
                                     ),
                                   ],
@@ -424,31 +388,22 @@ _isEditing
           ),
         ),
       ),
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 1, // Set to 1 to highlight "Personal" by default
-        onTap: (int index) {
-          // Add navigation logic if needed
-        },
+        currentIndex: 1,
+        onTap: (int index) {},
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.groups_3_outlined,
-              color: Colors.black,
-            ),
+            icon: Icon(Icons.groups_3_outlined, color: Colors.black),
             label: 'Community',
             backgroundColor: Colors.white,
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.person,
-              color: Color(0xFF288F13), // Highlight "Personal" with green
-            ),
+            icon: Icon(Icons.person, color: Color(0xFF288F13)),
             label: 'Personal',
             backgroundColor: Colors.white,
           ),
         ],
-        selectedItemColor: Color(0xFF288F13), // Green color when selected
+        selectedItemColor: Color(0xFF288F13),
         unselectedItemColor: Colors.black,
         backgroundColor: Colors.white,
         elevation: 8.0,
@@ -464,16 +419,14 @@ _isEditing
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-       Text(
-        labelText,
-        overflow: TextOverflow.ellipsis, // Add ellipsis to prevent overflow
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-          color: Color(0xFF2C812A),
+        Text(
+          labelText,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Color(0xFF2C812A),
+          ),
         ),
-      ),
-
         const SizedBox(height: 8),
         Container(
           height: 40,
@@ -482,17 +435,13 @@ _isEditing
             borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10),
-         child: TextField(
-  controller: controller,
-  enabled: enabled,
-  decoration: const InputDecoration(
-    border: InputBorder.none,
-  ),
-  style: const TextStyle(
-    overflow: TextOverflow.ellipsis, // Add ellipsis for long text
-  ),
-),
-
+          child: TextField(
+            controller: controller,
+            enabled: enabled,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+            ),
+          ),
         ),
       ],
     );

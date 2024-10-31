@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class Inputvalue extends StatefulWidget {
-  final String scannedCode; // The scanned QR code
+  final String scannedCode;
 
   const Inputvalue({Key? key, required this.scannedCode}) : super(key: key);
 
@@ -13,12 +13,11 @@ class Inputvalue extends StatefulWidget {
 
 class _InputvalueState extends State<Inputvalue> {
   final TextEditingController _totalSpendController = TextEditingController();
-  
-  String? fullName; // To store the full name
-  String? selectedCategory; // To store the selected category
-  bool isLoading = false; // To control the loading state for the save button
 
-  // List of categories
+  String? fullName;
+  String? selectedCategory;
+  bool isLoading = false;
+
   final List<String> categories = [
     'Accommodation',
     'Food and Beverages',
@@ -35,20 +34,22 @@ class _InputvalueState extends State<Inputvalue> {
   @override
   void initState() {
     super.initState();
-    fetchUserData(); // Fetch user data based on the document ID from scanned code
+    fetchUserData();
   }
 
   void fetchUserData() async {
-    String documentID = widget.scannedCode.trim(); // Assuming scannedCode is the document ID
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(documentID).get();
+    String documentID = widget.scannedCode.trim();
 
-    if (userDoc.exists) {
-      final userData = userDoc.data() as Map<String, dynamic>;
+    // Reference to the Realtime Database to fetch user data based on scanned code
+    DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$documentID');
+    DatabaseEvent event = await userRef.once();
+
+    if (event.snapshot.exists) {
+      final userData = Map<String, dynamic>.from(event.snapshot.value as Map);
       setState(() {
-        // Fetch first and last name
         String firstName = userData['first_name'] ?? 'N/A';
         String lastName = userData['last_name'] ?? 'N/A';
-        fullName = '$firstName $lastName'; // Combine first and last name
+        fullName = '$firstName $lastName';
       });
     } else {
       setState(() {
@@ -63,41 +64,34 @@ class _InputvalueState extends State<Inputvalue> {
       final totalSpend = _totalSpendController.text.trim();
       if (totalSpend.isNotEmpty && fullName != null) {
         setState(() {
-          isLoading = true; // Start loading
+          isLoading = true;
         });
 
         final now = DateTime.now();
-
-        // Use the scanned code directly as the UID
         String documentID = widget.scannedCode.trim();
 
         // Query to find the establishment associated with the user's email
-        var establishmentQuery = await FirebaseFirestore.instance
-            .collection('establishments')
-            .where('email', isEqualTo: userEmail)
-            .get();
+        DatabaseReference establishmentRef = FirebaseDatabase.instance.ref('establishments');
+        DataSnapshot establishmentSnapshot = await establishmentRef.orderByChild('email').equalTo(userEmail).get();
 
-        if (establishmentQuery.docs.isNotEmpty) {
-          // Assuming we want to take the first matching establishment
-          String establishmentDocID = establishmentQuery.docs.first.id;
+        if (establishmentSnapshot.exists) {
+          var establishmentData = Map<String, dynamic>.from(establishmentSnapshot.value as Map);
+          String establishmentDocID = establishmentData.keys.first;
 
-          await FirebaseFirestore.instance.collection('Visits').add({
-            'UID': documentID, // Store the scanned code as UID
-            'EstablishmentID': establishmentDocID, // Save the establishment document ID
-            'TotalSpend': double.tryParse(totalSpend), // Ensure numeric values
-            'Category': selectedCategory, // Store the selected category
-            'Date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}', // Standard date format
-            'Time': '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}', // Standard time format
+          await FirebaseDatabase.instance.ref('Visits').push().set({
+            'UID': documentID,
+            'EstablishmentID': establishmentDocID,
+            'TotalSpend': double.tryParse(totalSpend),
+            'Category': selectedCategory,
+            'Date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+            'Time': '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Data saved successfully!')),
           );
 
-          // Clear the input field after saving
           _totalSpendController.clear();
-
-          // Navigate back to the previous page
           Navigator.pop(context);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -115,13 +109,12 @@ class _InputvalueState extends State<Inputvalue> {
       );
     }
     setState(() {
-      isLoading = false; // Stop loading
+      isLoading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use full name to display
     String displayName = fullName ?? 'Loading...';
 
     return Scaffold(
@@ -172,7 +165,7 @@ class _InputvalueState extends State<Inputvalue> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Full Name:', // Label for Full Name
+                    'Full Name:',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -181,12 +174,10 @@ class _InputvalueState extends State<Inputvalue> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    displayName, // Display the full name
+                    displayName,
                     style: const TextStyle(fontSize: 18, color: Colors.black),
                   ),
                   const SizedBox(height: 20),
-
-                  // Categories Section
                   const Text(
                     'Categories:',
                     style: TextStyle(fontSize: 18, color: Colors.black),
@@ -217,7 +208,6 @@ class _InputvalueState extends State<Inputvalue> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
                   const Text(
                     'Total Spend:',
                     style: TextStyle(fontSize: 18, color: Colors.black),
@@ -234,13 +224,13 @@ class _InputvalueState extends State<Inputvalue> {
                   const SizedBox(height: 20),
                   Center(
                     child: ElevatedButton(
-                      onPressed: isLoading ? null : saveData, // Disable button if loading
+                      onPressed: isLoading ? null : saveData,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF288F13),
                         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                       ),
                       child: isLoading
-                          ? const CircularProgressIndicator(color: Colors.white) // Show loading indicator
+                          ? const CircularProgressIndicator(color: Colors.white)
                           : const Text(
                               'Save',
                               style: TextStyle(color: Colors.white, fontSize: 18),
@@ -256,7 +246,7 @@ class _InputvalueState extends State<Inputvalue> {
             left: 20,
             child: GestureDetector(
               onTap: () {
-                Navigator.pop(context); // Navigate back on tap
+                Navigator.pop(context);
               },
               child: Container(
                 padding: const EdgeInsets.all(10),
