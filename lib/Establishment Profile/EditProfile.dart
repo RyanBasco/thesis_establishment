@@ -1,0 +1,500 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class EditProfile extends StatefulWidget {
+  const EditProfile({Key? key}) : super(key: key);
+
+  @override
+  _EditProfileState createState() => _EditProfileState();
+}
+
+class _EditProfileState extends State<EditProfile> {
+  String _establishmentName = '';
+  String _tourismType = '';
+  String _barangay = '';
+  String _subCategory = '';
+  String _email = '';
+
+  bool _isEditing = false;
+  final TextEditingController _establishmentNameController = TextEditingController();
+  final TextEditingController _tourismTypeController = TextEditingController();
+  final TextEditingController _barangayController = TextEditingController();
+  final TextEditingController _subCategoryController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchEstablishmentData();
+  }
+
+
+  Future<void> _fetchEstablishmentData() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        var querySnapshot = await FirebaseFirestore.instance
+            .collection('establishments')
+            .where('email', isEqualTo: user.email)
+            .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          var data = querySnapshot.docs.first.data();
+          _updateControllers(data);
+        } else {
+          var doc = await FirebaseFirestore.instance
+              .collection('establishments')
+              .doc(user.uid)
+              .get();
+
+          if (doc.exists) {
+            _updateControllers(doc.data() as Map<String, dynamic>);
+          } else {
+            print('Establishment data not found for user.');
+          }
+        }
+      } catch (e) {
+        print('Failed to fetch establishment data: $e');
+      }
+    } else {
+      print('No authenticated user found.');
+    }
+  }
+
+  void _updateControllers(Map<String, dynamic> data) {
+    setState(() {
+      _establishmentName = data['establishmentName'] ?? '';
+      _tourismType = data['tourismType'] ?? '';
+      _barangay = data['barangay'] ?? '';
+      _subCategory = data['subCategory'] ?? '';
+      _email = data['email'] ?? '';
+
+      _establishmentNameController.text = _establishmentName;
+      _tourismTypeController.text = _tourismType;
+      _barangayController.text = _barangay;
+      _subCategoryController.text = _subCategory;
+      _emailController.text = _email;
+    });
+  }
+
+  Future<void> _saveProfile() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('establishments')
+            .doc(user.uid)
+            .update({
+          'establishmentName': _establishmentNameController.text,
+          'tourismType': _tourismTypeController.text,
+          'barangay': _barangayController.text,
+          'subCategory': _subCategoryController.text,
+        });
+        setState(() {
+          _isEditing = false;
+        });
+      } catch (e) {
+        print('Failed to update profile: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFEEFFA9),
+              Color(0xFFDBFF4C),
+              Color(0xFF51F643),
+            ],
+            stops: [0.15, 0.54, 1.0],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(22.0),
+          child: Column(
+            children: [
+              // Back button and title at the top
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.5),
+                            blurRadius: 5,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(12.0),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.black,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 85),
+                  const Text(
+                    'Edit Profile',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // White box in the middle with profile picture and camera icon
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 20),
+                    padding: const EdgeInsets.all(10.0),
+                    height: 690,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.5),
+                          blurRadius: 5,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Black circle with profile icon
+                        Positioned(
+                          top: 25,
+                          left: 120,
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black,
+                            ),
+                            child: const Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 55,
+                            ),
+                          ),
+                        ),
+                        // Grey circle with camera icon
+                        Positioned(
+                          top: 80,
+                          left: 190,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.grey,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                        // Profile information fields
+                        Positioned(
+                          left: 20,
+                          top: 140,
+                          right: 20,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildTextField(
+                                labelText: 'Establishment Name',
+                                controller: _establishmentNameController,
+                                enabled: _isEditing,
+                              ),
+                              const SizedBox(height: 20),
+                              // Tourism Type Field
+                              _isEditing
+                                  ? DropdownButtonFormField<String>(
+                                      value: _tourismType.isNotEmpty && ['primary', 'secondary'].contains(_tourismType)
+                                          ? _tourismType
+                                          : null,
+                                      items: ['primary', 'secondary']
+                                          .map((type) => DropdownMenuItem(
+                                                value: type,
+                                                child: Text(type),
+                                              ))
+                                          .toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _tourismType = value ?? '';
+                                          _tourismTypeController.text = _tourismType;
+                                        });
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Tourism Type',
+                                        labelStyle: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                          color: Color(0xFF2C812A),
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey[300],
+                                      ),
+                                    )
+                                  : _buildTextField(
+                                      labelText: 'Tourism Type',
+                                      controller: _tourismTypeController,
+                                      enabled: false,
+                                    ),
+                              const SizedBox(height: 20),
+                              _buildTextField(
+                                labelText: 'Barangay',
+                                controller: _barangayController,
+                                enabled: _isEditing,
+                              ),
+                              const SizedBox(height: 20),
+                              // Subcategory Field
+                            // Subcategory Field
+_isEditing
+    ? ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: 60,
+        ),
+        child: DropdownButtonFormField<String>(
+          value: _subCategory.isNotEmpty &&
+                  [
+                    'Accomodation Establishments',
+                    'Travel and Tour Services',
+                    'Tourist Transport Operators',
+                    'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+                    'Adventure/ Sports and Ecotourism Facilities',
+                    'Tourism Frontliner'
+                  ].contains(_subCategory)
+              ? _subCategory
+              : null,
+          items: [
+            'Accomodation Establishments',
+            'Travel and Tour Services',
+            'Tourist Transport Operators',
+            'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+            'Adventure/ Sports and Ecotourism Facilities',
+            'Tourism Frontliner'
+          ]
+              .map((category) => DropdownMenuItem(
+                    value: category,
+                    child: Text(category),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _subCategory = value ?? '';
+              _subCategoryController.text = _subCategory;
+            });
+          },
+          decoration: InputDecoration(
+            labelText: 'Subcategory',
+            labelStyle: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Color(0xFF2C812A),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.grey[300],
+          ),
+        ),
+      )
+    : _buildTextField(
+        labelText: 'Subcategory',
+        controller: _subCategoryController,
+        enabled: false,
+      ),
+
+                              const SizedBox(height: 20),
+                              _buildTextField(
+                                labelText: 'Email',
+                                controller: _emailController,
+                                enabled: false,
+                              ),
+                              const SizedBox(height: 20),
+                              // Edit Button
+                              if (!_isEditing)
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditing = true;
+                                    });
+                                  },
+                                  child: const Text(
+                                    'Edit',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Color(0xFF288F13),
+                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.zero,
+                                    ),
+                                  ),
+                                ),
+
+                              // Cancel and Save Buttons
+                              if (_isEditing)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _isEditing = false;
+                                          _updateControllers({
+                                            'establishmentName': _establishmentName,
+                                            'tourismType': _tourismType,
+                                            'barangay': _barangay,
+                                            'subCategory': _subCategory,
+                                            'email': _email,
+                                          });
+                                        });
+                                      },
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.zero,
+                                        ),
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: _saveProfile,
+                                      child: const Text(
+                                        'Save',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Color(0xFF288F13),
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.zero,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      // Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 1, // Set to 1 to highlight "Personal" by default
+        onTap: (int index) {
+          // Add navigation logic if needed
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.groups_3_outlined,
+              color: Colors.black,
+            ),
+            label: 'Community',
+            backgroundColor: Colors.white,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.person,
+              color: Color(0xFF288F13), // Highlight "Personal" with green
+            ),
+            label: 'Personal',
+            backgroundColor: Colors.white,
+          ),
+        ],
+        selectedItemColor: Color(0xFF288F13), // Green color when selected
+        unselectedItemColor: Colors.black,
+        backgroundColor: Colors.white,
+        elevation: 8.0,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String labelText,
+    required TextEditingController controller,
+    bool enabled = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+       Text(
+        labelText,
+        overflow: TextOverflow.ellipsis, // Add ellipsis to prevent overflow
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          color: Color(0xFF2C812A),
+        ),
+      ),
+
+        const SizedBox(height: 8),
+        Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+         child: TextField(
+  controller: controller,
+  enabled: enabled,
+  decoration: const InputDecoration(
+    border: InputBorder.none,
+  ),
+  style: const TextStyle(
+    overflow: TextOverflow.ellipsis, // Add ellipsis for long text
+  ),
+),
+
+        ),
+      ],
+    );
+  }
+}

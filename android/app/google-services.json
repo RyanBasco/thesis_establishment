@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "920622301670",
+    "firebase_url": "https://testingapp-589a1-default-rtdb.firebaseio.com",
+    "project_id": "testingapp-589a1",
+    "storage_bucket": "testingapp-589a1.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920622301670:android:366554dc49dfc717e51627",
+        "android_client_info": {
+          "package_name": "com.example.demoapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWzF8ETNg8zZVB4vobis1SDCoYFZ7abWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920622301670:android:e6f743bf397fbfa9e51627",
+        "android_client_info": {
+          "package_name": "com.example.testing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWzF8ETNg8zZVB4vobis1SDCoYFZ7abWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920622301670:android:db5df9b5c9faeb40e51627",
+        "android_client_info": {
+          "package_name": "com.example.thesis_establishment"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWzF8ETNg8zZVB4vobis1SDCoYFZ7abWg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
