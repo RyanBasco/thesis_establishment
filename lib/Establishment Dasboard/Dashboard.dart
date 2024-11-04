@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Analytics.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/GenerateQR.dart';
+import 'package:thesis_establishment/Establishment%20Dasboard/ServiceOffered.dart';
 import 'package:thesis_establishment/Records/Records.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Review.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/ScanQR.dart';
@@ -21,12 +22,13 @@ class _DashboardPageState extends State<DashboardPage> {
   String establishmentName = 'Loading...';
 
   final List<Map<String, dynamic>> _boxes = [
-    {'title': 'Scan QR', 'icon': Icons.qr_code},
-    {'title': 'Generate QR', 'icon': Icons.qr_code_scanner},
-    {'title': 'Records', 'icon': Icons.receipt},
-    {'title': 'Sale', 'icon': Icons.store}, // Changed icon to represent "Sale"
-    {'title': 'Review', 'icon': Icons.announcement},
-  ];
+  {'title': 'Scan QR', 'icon': Icons.qr_code},
+  {'title': 'Service Offered', 'icon': Icons.miscellaneous_services}, // New Box Added
+  {'title': 'Generate QR', 'icon': Icons.qr_code_scanner},
+  {'title': 'Records', 'icon': Icons.receipt},
+  {'title': 'Sales', 'icon': Icons.store},
+  {'title': 'Review', 'icon': Icons.announcement},
+];
 
   @override
   void initState() {
@@ -136,6 +138,12 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _navigateToServiceOffered (BuildContext context){
+    Navigator.push(context,
+     MaterialPageRoute(builder: (context) => TouristServiceSelection())
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredBoxes = _boxes.where((box) {
@@ -225,8 +233,10 @@ class _DashboardPageState extends State<DashboardPage> {
                         _navigateToRecords(context);
                       } else if (box['title'] == 'Review') {
                         _navigateToReview(context);
-                      } else if (box['title'] == 'Analytics') {
+                      } else if (box['title'] == 'Sales') {
                         _navigateToAnalytics(context);
+                      } else if (box['title'] == 'Service Offered') {
+                        _navigateToServiceOffered(context);
                       }
                     },
                     child: Container(

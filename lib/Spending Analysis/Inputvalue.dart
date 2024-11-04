@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:thesis_establishment/Establishment%20Dasboard/ScanQR.dart';
 
 class Inputvalue extends StatefulWidget {
   final String scannedCode;
@@ -58,60 +59,108 @@ class _InputvalueState extends State<Inputvalue> {
     }
   }
 
-  Future<void> saveData() async {
-    final userEmail = FirebaseAuth.instance.currentUser?.email;
-    if (userEmail != null) {
-      final totalSpend = _totalSpendController.text.trim();
-      if (totalSpend.isNotEmpty && fullName != null) {
-        setState(() {
-          isLoading = true;
-        });
 
-        final now = DateTime.now();
-        String documentID = widget.scannedCode.trim();
 
-        // Query to find the establishment associated with the user's email
-        DatabaseReference establishmentRef = FirebaseDatabase.instance.ref('establishments');
-        DataSnapshot establishmentSnapshot = await establishmentRef.orderByChild('email').equalTo(userEmail).get();
+Future<void> saveData() async {
+  final userEmail = FirebaseAuth.instance.currentUser?.email;
+  if (userEmail != null) {
+    final totalSpend = _totalSpendController.text.trim();
+    if (totalSpend.isNotEmpty && fullName != null) {
+      setState(() {
+        isLoading = true;
+      });
 
-        if (establishmentSnapshot.exists) {
-          var establishmentData = Map<String, dynamic>.from(establishmentSnapshot.value as Map);
-          String establishmentDocID = establishmentData.keys.first;
+      final now = DateTime.now();
+      String documentID = widget.scannedCode.trim();
 
-          await FirebaseDatabase.instance.ref('Visits').push().set({
-            'UID': documentID,
-            'EstablishmentID': establishmentDocID,
+      // Generate a new unique ID each time for a new entry in Visits
+      DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits').push();
+
+      // Query to fetch the establishment associated with the user's email
+      DatabaseReference establishmentRef = FirebaseDatabase.instance.ref('establishments');
+      DataSnapshot establishmentSnapshot = await establishmentRef.orderByChild('email').equalTo(userEmail).get();
+
+      if (establishmentSnapshot.exists) {
+        var establishmentData = Map<String, dynamic>.from(establishmentSnapshot.value as Map);
+        String establishmentDocID = establishmentData.keys.first;
+        var establishmentDetails = establishmentData[establishmentDocID];
+
+        // Fetch user details from the Users node
+        DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$documentID');
+        DatabaseEvent userEvent = await userRef.once();
+        if (userEvent.snapshot.exists) {
+          var userDetails = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+
+          // Save data in the newly generated Document ID under Visits
+          await visitsRef.set({
             'TotalSpend': double.tryParse(totalSpend),
             'Category': selectedCategory,
             'Date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
             'Time': '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
+            'User': {
+              'UID': documentID,
+              'first_name': userDetails['first_name'],
+              'last_name': userDetails['last_name'],
+              'birthday': userDetails['birthday'],
+              'city': userDetails['city'],
+              'civil_status': userDetails['civil_status'],
+              'contact_number': userDetails['contact_number'],
+              'countryOfResidence': userDetails['countryOfResidence'],
+              'email': userDetails['email'],
+              'nationality': userDetails['nationality'],
+              'province': userDetails['province'],
+              'purpose_of_travel': userDetails['purpose_of_travel'],
+              'region': userDetails['region'],
+              'sex': userDetails['sex']
+            },
+            'Establishment': {
+              'EstablishmentID': establishmentDocID,
+              'barangay': establishmentDetails['barangay'],
+              'city': establishmentDetails['city'],
+              'contact': establishmentDetails['contact'],
+              'email': establishmentDetails['email'],
+              'establishmentName': establishmentDetails['establishmentName'],
+              'subCategory': establishmentDetails['subCategory'],
+              'tourismType': establishmentDetails['tourismType']
+            }
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Data saved successfully!')),
           );
 
-          _totalSpendController.clear();
-          Navigator.pop(context);
+          // Navigate back to ScanQr page after successful save
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => ScanQR()),
+          );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Establishment not found for this user.')),
+            const SnackBar(content: Text('User data not found.')),
           );
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter the total spend and ensure the full name is available.')),
+          const SnackBar(content: Text('Establishment not found for this user.')),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not found.')),
+        const SnackBar(content: Text('Please enter the total spend and ensure the full name is available.')),
       );
     }
-    setState(() {
-      isLoading = false;
-    });
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('User not found.')),
+    );
   }
+  setState(() {
+    isLoading = false;
+  });
+}
+
+
+
 
   @override
   Widget build(BuildContext context) {

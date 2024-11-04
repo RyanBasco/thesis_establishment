@@ -67,72 +67,114 @@ class _AnalyticsState extends State<Analytics> {
   }
 
   Future<void> fetchTotalSpendData() async {
-    if (establishmentDocId == null) return;
+  if (establishmentDocId == null) return;
 
-    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
-    DatabaseEvent visitsEvent = await visitsRef.once();
+  DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+  DatabaseEvent visitsEvent = await visitsRef.once();
 
-    Map<String, double> spendByDate = {}; // Map to aggregate spend by date
+  Map<String, double> spendByDate = {}; // Map to aggregate spend by date
 
-    if (visitsEvent.snapshot.exists) {
-      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
+  if (visitsEvent.snapshot.exists) {
+    var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-      for (var entry in visitsData.entries) {
-        var data = Map<String, dynamic>.from(entry.value); // Safely cast to Map<String, dynamic>
+    for (var entry in visitsData.entries) {
+      var data = Map<String, dynamic>.from(entry.value);
 
-        if (data['EstablishmentID'] == establishmentDocId) {
-          double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+      // Check if 'Establishment' subfield exists and contains 'EstablishmentID'
+      if (data['Establishment'] != null &&
+          data['Establishment']['EstablishmentID'] == establishmentDocId) {
+        
+        double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
 
-          DateTime date;
-          if (data['Date'] is String) {
-            String dateString = data['Date'];
-            try {
-              date = DateFormat('yyyy-MM-dd').parse(dateString);
-            } catch (e) {
-              date = DateTime.now();
-            }
-          } else {
+        DateTime date;
+        if (data['Date'] is String) {
+          String dateString = data['Date'];
+          try {
+            date = DateFormat('yyyy-MM-dd').parse(dateString);
+          } catch (e) {
             date = DateTime.now();
           }
+        } else {
+          date = DateTime.now();
+        }
 
-          String formattedDate;
-          if (selectedOption == 'Yearly') {
-            formattedDate = DateFormat('yyyy').format(date);
-          } else if (selectedOption == 'Monthly') {
-            formattedDate = DateFormat('MMMM yyyy').format(date);
-          } else if (selectedOption == 'Weekly') {
-            int weekNumber = getWeekOfYear(date);
-            formattedDate = 'Week $weekNumber, ${date.year}';
-          } else if (selectedOption == 'Daily') {
-            if (date.day == DateTime.now().day &&
-                date.month == DateTime.now().month &&
-                date.year == DateTime.now().year) {
-              formattedDate = DateFormat('MMMM dd, yyyy').format(date);
-            } else {
-              continue;
-            }
-          } else {
+        String formattedDate;
+        if (selectedOption == 'Yearly') {
+          formattedDate = DateFormat('yyyy').format(date);
+        } else if (selectedOption == 'Monthly') {
+          formattedDate = DateFormat('MMMM yyyy').format(date);
+        } else if (selectedOption == 'Weekly') {
+          int weekNumber = getWeekOfYear(date);
+          formattedDate = 'Week $weekNumber, ${date.year}';
+        } else if (selectedOption == 'Daily') {
+          if (date.day == DateTime.now().day &&
+              date.month == DateTime.now().month &&
+              date.year == DateTime.now().year) {
             formattedDate = DateFormat('MMMM dd, yyyy').format(date);
-          }
-
-          if (spendByDate.containsKey(formattedDate)) {
-            spendByDate[formattedDate] = spendByDate[formattedDate]! + totalSpend;
           } else {
-            spendByDate[formattedDate] = totalSpend;
+            continue;
           }
+        } else {
+          formattedDate = DateFormat('MMMM dd, yyyy').format(date);
+        }
+
+        if (spendByDate.containsKey(formattedDate)) {
+          spendByDate[formattedDate] = spendByDate[formattedDate]! + totalSpend;
+        } else {
+          spendByDate[formattedDate] = totalSpend;
         }
       }
     }
-
-    List<ChartData> fetchedData = spendByDate.entries
-        .map((entry) => ChartData(entry.key, entry.value))
-        .toList();
-
-    setState(() {
-      chartData = fetchedData;
-      isLoading = false;
-    });
   }
+
+  // Convert spendByDate map to a sorted list of ChartData
+  List<ChartData> fetchedData = spendByDate.entries
+      .map((entry) => ChartData(entry.key, entry.value))
+      .toList();
+
+  // Sort the list based on date parsing according to selectedOption
+  fetchedData.sort((a, b) {
+    DateTime dateA, dateB;
+    try {
+      if (selectedOption == 'Yearly') {
+        dateA = DateFormat('yyyy').parse(a.xValue);
+        dateB = DateFormat('yyyy').parse(b.xValue);
+      } else if (selectedOption == 'Monthly') {
+        dateA = DateFormat('MMMM yyyy').parse(a.xValue);
+        dateB = DateFormat('MMMM yyyy').parse(b.xValue);
+      } else if (selectedOption == 'Weekly') {
+        final weekPattern = RegExp(r'Week (\d+), (\d{4})');
+        final matchA = weekPattern.firstMatch(a.xValue);
+        final matchB = weekPattern.firstMatch(b.xValue);
+
+        if (matchA != null && matchB != null) {
+          int weekA = int.parse(matchA.group(1)!);
+          int yearA = int.parse(matchA.group(2)!);
+          dateA = DateTime(yearA, 1, 1).add(Duration(days: (weekA - 1) * 7));
+
+          int weekB = int.parse(matchB.group(1)!);
+          int yearB = int.parse(matchB.group(2)!);
+          dateB = DateTime(yearB, 1, 1).add(Duration(days: (weekB - 1) * 7));
+        } else {
+          return 0; // In case of format issues, keep order as is
+        }
+      } else {
+        dateA = DateFormat('MMMM dd, yyyy').parse(a.xValue);
+        dateB = DateFormat('MMMM dd, yyyy').parse(b.xValue);
+      }
+    } catch (e) {
+      return 0; // If parsing fails, maintain order as is
+    }
+    return dateA.compareTo(dateB);
+  });
+
+  setState(() {
+    chartData = fetchedData;
+    isLoading = false;
+  });
+}
+
+
 
   void _onItemTapped(int index) {
     setState(() {
@@ -196,7 +238,7 @@ class _AnalyticsState extends State<Analytics> {
                     ),
                     const SizedBox(width: 95),
                     const Text(
-                      'Analytics',
+                      'Sales',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

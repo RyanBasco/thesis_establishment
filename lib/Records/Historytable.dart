@@ -21,34 +21,40 @@ class _HistoryState extends State<History> {
   Future<void> fetchUserDocumentId() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // Query to get the document ID based on user's email in Realtime Database
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
+      DatabaseEvent event =
+          await dbRef.orderByChild('email').equalTo(user.email).once();
 
       if (event.snapshot.exists) {
         var data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        userDocId = data.keys.first; // Get the first matching document ID
+        userDocId = data.keys.first;
         fetchVisitRecords();
       }
     }
   }
 
   Future<void> fetchVisitRecords() async {
-    if (userDocId == null) return;
+  if (userDocId == null) return;
 
-    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
-    DatabaseEvent visitsEvent = await visitsRef.orderByChild('EstablishmentID').equalTo(userDocId).once();
+  // Fetch all visit records from the Visits node
+  DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+  DatabaseEvent visitsEvent = await visitsRef.once();
 
-    DateFormat dateFormat1 = DateFormat('yyyy-MM-dd');
-    DateFormat dateFormat2 = DateFormat('yyyy-M-d');
+  DateFormat dateFormat1 = DateFormat('yyyy-MM-dd');
+  DateFormat dateFormat2 = DateFormat('yyyy-M-d');
 
-    List<Map<String, dynamic>> records = [];
-    if (visitsEvent.snapshot.exists) {
-      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
+  List<Map<String, dynamic>> records = [];
 
-      for (var entry in visitsData.entries) {
-        var data = Map<String, dynamic>.from(entry.value);
+  // Only proceed if there are visit records
+  if (visitsEvent.snapshot.exists) {
+    var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
+    for (var entry in visitsData.entries) {
+      var data = Map<String, dynamic>.from(entry.value);
+
+      // Filter to include only records with matching EstablishmentID
+      if (data['EstablishmentID'] == userDocId) {
+        // Parse date and handle different formats
         DateTime date;
         if (data['Date'] is String) {
           try {
@@ -64,10 +70,12 @@ class _HistoryState extends State<History> {
           date = DateTime.now();
         }
 
+        // Get category, total spend, and user ID for each record
         String category = data['Category'] ?? 'N/A';
         double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
         String uid = data['UID'];
 
+        // Fetch user details for UID
         DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
         DatabaseEvent userEvent = await userRef.once();
         String firstName = 'Unknown';
@@ -81,6 +89,7 @@ class _HistoryState extends State<History> {
 
         String fullName = '$firstName $lastName';
 
+        // Add each visit record separately, even if it has the same name but different categories or spending
         records.add({
           'Name': fullName,
           'Category': category,
@@ -89,13 +98,18 @@ class _HistoryState extends State<History> {
         });
       }
     }
-
-    if (mounted) {
-      setState(() {
-        visitRecords = records;
-      });
-    }
   }
+
+  // Update state with all matching visit records
+  if (mounted) {
+    setState(() {
+      visitRecords = records;
+    });
+  }
+}
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +132,8 @@ class _HistoryState extends State<History> {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -163,19 +178,21 @@ class _HistoryState extends State<History> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.vertical,
                               child: Container(
-                                color: Colors.white, // White background for the table
+                                color: Colors.white,
                                 padding: const EdgeInsets.all(8.0),
                                 child: Table(
-                                  border: TableBorder.all(color: Colors.black54),
+                                  border:
+                                      TableBorder.all(color: Colors.black54),
                                   columnWidths: const {
                                     0: FixedColumnWidth(150),
                                     1: FixedColumnWidth(120),
                                     2: FixedColumnWidth(100),
                                     3: FixedColumnWidth(100),
-                                    4: FixedColumnWidth(100),
+                                    4: FixedColumnWidth(120),
                                   },
                                   children: [
-                                    TableRow(
+                                    // Header row with enhanced styling
+                                    const TableRow(
                                       decoration: const BoxDecoration(
                                         color: Colors.black12,
                                       ),
@@ -184,7 +201,8 @@ class _HistoryState extends State<History> {
                                           padding: EdgeInsets.all(8.0),
                                           child: Text(
                                             'Name',
-                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
@@ -192,7 +210,8 @@ class _HistoryState extends State<History> {
                                           padding: EdgeInsets.all(8.0),
                                           child: Text(
                                             'Category',
-                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
@@ -200,7 +219,8 @@ class _HistoryState extends State<History> {
                                           padding: EdgeInsets.all(8.0),
                                           child: Text(
                                             'Date',
-                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
@@ -208,7 +228,8 @@ class _HistoryState extends State<History> {
                                           padding: EdgeInsets.all(8.0),
                                           child: Text(
                                             'Time',
-                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
@@ -216,52 +237,71 @@ class _HistoryState extends State<History> {
                                           padding: EdgeInsets.all(8.0),
                                           child: Text(
                                             'Total Spend',
-                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
                                       ],
                                     ),
-                                    ...visitRecords.map(
-                                      (record) => TableRow(
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              record['Name'] ?? 'Unknown',
-                                              textAlign: TextAlign.center,
-                                            ),
+                                    // Data rows with alternating row colors
+                                    ...visitRecords.asMap().entries.map(
+                                      (entry) {
+                                        int index = entry.key;
+                                        Map<String, dynamic> record =
+                                            entry.value;
+                                        return TableRow(
+                                          decoration: BoxDecoration(
+                                            color: index.isEven
+                                                ? Colors.grey[200]
+                                                : Colors.white,
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              record['Category'],
-                                              textAlign: TextAlign.center,
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                record['Name'] ?? 'Unknown',
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              DateFormat('yyyy-MM-dd').format(record['Date']),
-                                              textAlign: TextAlign.center,
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                record['Category'],
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              DateFormat('hh:mm a').format(record['Date']),
-                                              textAlign: TextAlign.center,
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                DateFormat('yyyy-MM-dd')
+                                                    .format(record['Date']),
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              '₱${record['TotalSpend'].toStringAsFixed(2)}',
-                                              textAlign: TextAlign.center,
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                DateFormat('hh:mm a')
+                                                    .format(record['Date']),
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                '₱${record['TotalSpend'].toStringAsFixed(2)}',
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
