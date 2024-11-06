@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 
 class EditProfile extends StatefulWidget {
   const EditProfile({Key? key}) : super(key: key);
@@ -12,34 +18,53 @@ class EditProfile extends StatefulWidget {
 class _EditProfileState extends State<EditProfile> {
   String _establishmentName = '';
   String _tourismType = '';
-  String _barangay = '';
+  String _barangay = ''; // Decoded barangay name
   String _subCategory = '';
   String _email = '';
+  String? _profileImageUrl;
+  File? _profileImage;
 
   bool _isEditing = false;
-  final TextEditingController _establishmentNameController = TextEditingController();
+  final TextEditingController _establishmentNameController =
+      TextEditingController();
   final TextEditingController _tourismTypeController = TextEditingController();
   final TextEditingController _barangayController = TextEditingController();
   final TextEditingController _subCategoryController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
+  // Store barangay code-to-name mapping
+  Map<String, String> barangayMap = {};
+
   @override
   void initState() {
     super.initState();
+    _loadBarangayData();
     _fetchEstablishmentData();
+  }
+
+  // Load barangay.json data and create a mapping of `brgy_code` to `brgy_name`
+  Future<void> _loadBarangayData() async {
+    final String response = await rootBundle.loadString('assets/barangay.json');
+    final List<dynamic> data = json.decode(response);
+    barangayMap = {for (var item in data) item['brgy_code']: item['brgy_name']};
   }
 
   Future<void> _fetchEstablishmentData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-        DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
+        DatabaseReference dbRef =
+            FirebaseDatabase.instance.ref('establishments');
+        DatabaseEvent event =
+            await dbRef.orderByChild('email').equalTo(user.email).once();
 
         if (event.snapshot.exists) {
-          var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
-          var firstRecord = Map<String, dynamic>.from(establishmentData.values.first);
+          var establishmentData =
+              Map<String, dynamic>.from(event.snapshot.value as Map);
+          var firstRecord =
+              Map<String, dynamic>.from(establishmentData.values.first);
 
+          // Update text controllers with fetched data
           _updateControllers(firstRecord);
         } else {
           print('Establishment data not found for user.');
@@ -52,17 +77,22 @@ class _EditProfileState extends State<EditProfile> {
     }
   }
 
+  // Populate controllers with fetched data, including decoded barangay name
   void _updateControllers(Map<String, dynamic> data) {
     setState(() {
       _establishmentName = data['establishmentName'] ?? '';
       _tourismType = data['tourismType'] ?? '';
-      _barangay = data['barangay'] ?? '';
+
+      // Decode barangay using the barangayMap
+      String barangayCode = data['barangay'] ?? '';
+      _barangay = barangayMap[barangayCode] ?? 'Unknown Barangay';
+
       _subCategory = data['subCategory'] ?? '';
       _email = data['email'] ?? '';
 
       _establishmentNameController.text = _establishmentName;
       _tourismTypeController.text = _tourismType;
-      _barangayController.text = _barangay;
+      _barangayController.text = _barangay; // Decoded barangay name
       _subCategoryController.text = _subCategory;
       _emailController.text = _email;
     });
@@ -72,11 +102,12 @@ class _EditProfileState extends State<EditProfile> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments/${user.uid}');
+        DatabaseReference dbRef =
+            FirebaseDatabase.instance.ref('establishments/${user.uid}');
         await dbRef.update({
           'establishmentName': _establishmentNameController.text,
           'tourismType': _tourismTypeController.text,
-          'barangay': _barangayController.text,
+          'barangay': _barangayController.text, // Store decoded barangay name
           'subCategory': _subCategoryController.text,
         });
         setState(() {
@@ -85,6 +116,62 @@ class _EditProfileState extends State<EditProfile> {
       } catch (e) {
         print('Failed to update profile: $e');
       }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      setState(() {
+        _profileImage = File(image.path);
+      });
+      await _uploadImageToFirebase(image);
+    }
+  }
+
+  Future<void> _uploadImageToFirebase(XFile image) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        // Use the user's email (or document ID) to create a unique file name
+        String email = user.email?.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_') ??
+            'unknown_user';
+        String fileName =
+            'Establishment/$email/profile_image/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        Reference ref = FirebaseStorage.instance.ref().child(fileName);
+        await ref.putFile(File(image.path));
+
+        String downloadUrl = await ref.getDownloadURL();
+
+        // Update Firestore with the new image URL
+        DatabaseReference dbRef =
+            FirebaseDatabase.instance.ref('Users/${user.uid}');
+        await dbRef.update({
+          'profile_image_url': downloadUrl,
+        });
+
+        setState(() {
+          _profileImageUrl = downloadUrl;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image uploaded successfully!')),
+          );
+        }
+      } catch (error) {
+        print('Failed to upload image: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Failed to upload image. Please try again.')),
+          );
+        }
+      }
+    } else {
+      print('No authenticated user found.');
     }
   }
 
@@ -110,7 +197,6 @@ class _EditProfileState extends State<EditProfile> {
           padding: const EdgeInsets.all(22.0),
           child: Column(
             children: [
-              // Back button and title at the top
               Row(
                 children: [
                   GestureDetector(
@@ -138,7 +224,7 @@ class _EditProfileState extends State<EditProfile> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 85),
+                  const SizedBox(width: 60),
                   const Text(
                     'Edit Profile',
                     style: TextStyle(
@@ -149,7 +235,6 @@ class _EditProfileState extends State<EditProfile> {
                 ],
               ),
               const SizedBox(height: 20),
-              // White box in the middle with profile picture and camera icon
               Expanded(
                 child: SingleChildScrollView(
                   child: Container(
@@ -173,35 +258,37 @@ class _EditProfileState extends State<EditProfile> {
                       children: [
                         Positioned(
                           top: 25,
-                          left: 120,
-                          child: Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black,
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 55,
-                            ),
+                          left: 95,
+                          child: CircleAvatar(
+                            backgroundColor: Colors.black,
+                            radius: 55,
+                            backgroundImage: _profileImageUrl != null
+                                ? NetworkImage(_profileImageUrl!)
+                                : null,
+                            child: _profileImageUrl == null
+                                ? const Icon(Icons.person,
+                                    color: Colors.white, size: 65)
+                                : null,
                           ),
                         ),
                         Positioned(
                           top: 80,
-                          left: 190,
-                          child: Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.grey,
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: 24,
+                          left: 170,
+                          child: GestureDetector(
+                            onTap:
+                                _pickImage, // Trigger file picker and upload on tap
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                             ),
                           ),
                         ),
@@ -220,7 +307,9 @@ class _EditProfileState extends State<EditProfile> {
                               const SizedBox(height: 20),
                               _isEditing
                                   ? DropdownButtonFormField<String>(
-                                      value: _tourismType.isNotEmpty && ['primary', 'secondary'].contains(_tourismType)
+                                      value: _tourismType.isNotEmpty &&
+                                              ['primary', 'secondary']
+                                                  .contains(_tourismType)
                                           ? _tourismType
                                           : null,
                                       items: ['primary', 'secondary']
@@ -232,7 +321,8 @@ class _EditProfileState extends State<EditProfile> {
                                       onChanged: (value) {
                                         setState(() {
                                           _tourismType = value ?? '';
-                                          _tourismTypeController.text = _tourismType;
+                                          _tourismTypeController.text =
+                                              _tourismType;
                                         });
                                       },
                                       decoration: InputDecoration(
@@ -243,7 +333,8 @@ class _EditProfileState extends State<EditProfile> {
                                           color: Color(0xFF2C812A),
                                         ),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                           borderSide: BorderSide.none,
                                         ),
                                         filled: true,
@@ -263,50 +354,60 @@ class _EditProfileState extends State<EditProfile> {
                               ),
                               const SizedBox(height: 20),
                               _isEditing
-                                  ? DropdownButtonFormField<String>(
-                                      value: _subCategory.isNotEmpty &&
-                                              [
-                                                'Accommodation Establishments',
-                                                'Travel and Tour Services',
-                                                'Tourist Transport Operators',
-                                                'Meetings, Incentives, Conventions and Exhibitions (MICE)',
-                                                'Adventure/ Sports and Ecotourism Facilities',
-                                                'Tourism Frontliner'
-                                              ].contains(_subCategory)
-                                          ? _subCategory
-                                          : null,
-                                      items: [
-                                        'Accommodation Establishments',
-                                        'Travel and Tour Services',
-                                        'Tourist Transport Operators',
-                                        'Meetings, Incentives, Conventions and Exhibitions (MICE)',
-                                        'Adventure/ Sports and Ecotourism Facilities',
-                                        'Tourism Frontliner'
-                                      ]
-                                          .map((category) => DropdownMenuItem(
-                                                value: category,
-                                                child: Text(category),
-                                              ))
-                                          .toList(),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _subCategory = value ?? '';
-                                          _subCategoryController.text = _subCategory;
-                                        });
-                                      },
-                                      decoration: InputDecoration(
-                                        labelText: 'Subcategory',
-                                        labelStyle: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                          color: Color(0xFF2C812A),
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 0),
+                                      child: DropdownButtonFormField<String>(
+                                        value: _subCategory.isNotEmpty &&
+                                                [
+                                                  'Accommodation Establishments',
+                                                  'Travel and Tour Services',
+                                                  'Tourist Transport Operators',
+                                                  'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+                                                  'Adventure/ Sports and Ecotourism Facilities',
+                                                  'Tourism Frontliner'
+                                                ].contains(_subCategory)
+                                            ? _subCategory
+                                            : null,
+                                        items: [
+                                          'Accommodation Establishments',
+                                          'Travel and Tour Services',
+                                          'Tourist Transport Operators',
+                                          'Meetings, Incentives, Conventions and Exhibitions (MICE)',
+                                          'Adventure/ Sports and Ecotourism Facilities',
+                                          'Tourism Frontliner'
+                                        ]
+                                            .map((category) => DropdownMenuItem(
+                                                  value: category,
+                                                  child: Text(category,
+                                                      overflow: TextOverflow
+                                                          .ellipsis),
+                                                ))
+                                            .toList(),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _subCategory = value ?? '';
+                                            _subCategoryController.text =
+                                                _subCategory;
+                                          });
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Subcategory',
+                                          labelStyle: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: Color(0xFF2C812A),
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey[300],
                                         ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        filled: true,
-                                        fillColor: Colors.grey[300],
+                                        isExpanded:
+                                            true, // Expands the dropdown to avoid overflow
                                       ),
                                     )
                                   : _buildTextField(
@@ -334,19 +435,22 @@ class _EditProfileState extends State<EditProfile> {
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Color(0xFF288F13),
-                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 30, vertical: 15),
                                   ),
                                 ),
                               if (_isEditing)
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     ElevatedButton(
                                       onPressed: () {
                                         setState(() {
                                           _isEditing = false;
                                           _updateControllers({
-                                            'establishmentName': _establishmentName,
+                                            'establishmentName':
+                                                _establishmentName,
                                             'tourismType': _tourismType,
                                             'barangay': _barangay,
                                             'subCategory': _subCategory,
@@ -360,7 +464,8 @@ class _EditProfileState extends State<EditProfile> {
                                       ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.red,
-                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 30, vertical: 15),
                                       ),
                                     ),
                                     ElevatedButton(
@@ -371,7 +476,8 @@ class _EditProfileState extends State<EditProfile> {
                                       ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Color(0xFF288F13),
-                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 30, vertical: 15),
                                       ),
                                     ),
                                   ],
