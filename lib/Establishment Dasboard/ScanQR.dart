@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart'; // Import ScreenUtil package
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
-import 'package:thesis_establishment/Spending%20Analysis/Inputvalue.dart'; // Ensure correct path
+import 'package:thesis_establishment/Spending%20Analysis/Inputvalue.dart';
 
 class ScanQR extends StatefulWidget {
   @override
@@ -10,9 +12,11 @@ class ScanQR extends StatefulWidget {
 }
 
 class _ScanQRState extends State<ScanQR> {
-  int _selectedIndex = 0; // Default selection for bottom navigation bar
-  String? scannedCode; // To store the scanned QR code
-  bool _isNavigated = false; // Flag to prevent multiple navigations
+  int _selectedIndex = 0;
+  String? scannedCode;
+  bool _isNavigated = false;
+  final DatabaseReference _databaseRef = FirebaseDatabase.instance.ref();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   void _onItemTapped(int index) {
     setState(() {
@@ -22,8 +26,23 @@ class _ScanQRState extends State<ScanQR> {
     if (index == 1) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => EstablishmentProfile()), // Navigate to EstablishmentProfile
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
       );
+    }
+  }
+
+  Future<void> _createPendingReview(String userId) async {
+    final User? user = _auth.currentUser;
+    final String? establishmentId = user?.uid;
+
+    if (establishmentId != null) {
+      await _databaseRef.child('pendingReviews/$userId').set({
+        'status': 'pending',
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'establishment_id': establishmentId,
+      });
+    } else {
+      print("No establishment ID found. Please ensure you're logged in.");
     }
   }
 
@@ -35,11 +54,7 @@ class _ScanQRState extends State<ScanQR> {
         height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFEEFFA9),
-              Color(0xFFDBFF4C),
-              Color(0xFF51F643),
-            ],
+            colors: [Color(0xFFEEFFA9), Color(0xFFDBFF4C), Color(0xFF51F643)],
             stops: [0.15, 0.54, 1.0],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -49,17 +64,16 @@ class _ScanQRState extends State<ScanQR> {
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h), // Responsive padding
+                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
                 child: Row(
                   children: [
-                    // Back button with circle and "<" icon
                     GestureDetector(
                       onTap: () {
-                        Navigator.pop(context); // Navigate back
+                        Navigator.pop(context);
                       },
                       child: Container(
-                        width: 40.w, // Responsive width
-                        height: 40.h, // Responsive height
+                        width: 40.w,
+                        height: 40.h,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,
@@ -77,13 +91,12 @@ class _ScanQRState extends State<ScanQR> {
                         ),
                       ),
                     ),
-                    // Adding padding to move 'Scan QR' slightly to the left
                     Padding(
-                      padding: EdgeInsets.only(left: 100.w), // Responsive padding
+                      padding: EdgeInsets.only(left: 100.w),
                       child: Text(
                         'Scan QR',
                         style: TextStyle(
-                          fontSize: 24.sp, // Responsive font size
+                          fontSize: 24.sp,
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
                         ),
@@ -96,10 +109,9 @@ class _ScanQRState extends State<ScanQR> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // QR Scanner (MobileScanner widget)
                     Container(
-                      width: 250.w, // Responsive width
-                      height: 250.h, // Responsive height
+                      width: 250.w,
+                      height: 250.h,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
@@ -115,18 +127,18 @@ class _ScanQRState extends State<ScanQR> {
                         borderRadius: BorderRadius.circular(16),
                         child: MobileScanner(
                           onDetect: (BarcodeCapture barcodeCapture) {
-                            if (_isNavigated) return; // Prevent multiple navigations
+                            if (_isNavigated) return;
 
                             final List<Barcode> barcodes = barcodeCapture.barcodes;
                             for (final barcode in barcodes) {
                               if (barcode.rawValue != null) {
                                 setState(() {
-                                  scannedCode = barcode.rawValue; // Store the scanned QR code
-                                  _isNavigated = true; // Set the flag to true
+                                  scannedCode = barcode.rawValue;
+                                  _isNavigated = true;
                                 });
                                 print('QR Code found: $scannedCode');
+                                _createPendingReview(scannedCode!);
 
-                                // Navigate to the Inputvalue page after a short delay
                                 Future.delayed(Duration(milliseconds: 500), () {
                                   Navigator.push(
                                     context,
@@ -135,31 +147,27 @@ class _ScanQRState extends State<ScanQR> {
                                           Inputvalue(scannedCode: scannedCode!),
                                     ),
                                   ).then((_) {
-                                    // Reset the flag when returning to this page
                                     setState(() {
                                       _isNavigated = false;
-                                      scannedCode = null; // Optional: Reset the scanned code
+                                      scannedCode = null;
                                     });
                                   });
                                 });
-
-                                break; // Exit the loop after handling the first valid barcode
+                                break;
                               }
                             }
                           },
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18), // Space between the scanner and the text
+                    const SizedBox(height: 18),
                     Align(
                       alignment: Alignment.center,
                       child: Text(
-                        scannedCode == null
-                            ? 'Align frame with QR code'
-                            : '', // Change this line to an empty string to hide the scanned code message
+                        scannedCode == null ? 'Align frame with QR code' : '',
                         style: TextStyle(
-                          color: Colors.grey[600], // Grey color for text
-                          fontSize: 18.sp, // Responsive font size
+                          color: Colors.grey[600],
+                          fontSize: 18.sp,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -181,7 +189,6 @@ class _ScanQRState extends State<ScanQR> {
               color: _selectedIndex == 0 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Community',
-            backgroundColor: Colors.white,
           ),
           BottomNavigationBarItem(
             icon: Icon(
@@ -189,7 +196,6 @@ class _ScanQRState extends State<ScanQR> {
               color: _selectedIndex == 1 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Personal',
-            backgroundColor: Colors.white,
           ),
         ],
         selectedItemColor: Color(0xFF288F13),

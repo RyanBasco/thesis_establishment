@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Analytics.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/GenerateQR.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/ServiceOffered.dart';
+import 'package:thesis_establishment/Records/Historytable.dart';
 import 'package:thesis_establishment/Records/Records.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Review.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/ScanQR.dart';
@@ -120,7 +121,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _navigateToRecords(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ClickPage()),
+      MaterialPageRoute(builder: (context) => History()),
     );
   }
 

@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-
 class EditProfile extends StatefulWidget {
   const EditProfile({Key? key}) : super(key: key);
 
@@ -18,7 +17,7 @@ class EditProfile extends StatefulWidget {
 class _EditProfileState extends State<EditProfile> {
   String _establishmentName = '';
   String _tourismType = '';
-  String _barangay = ''; // Decoded barangay name
+  String _barangay = '';
   String _subCategory = '';
   String _email = '';
   String? _profileImageUrl;
@@ -32,7 +31,6 @@ class _EditProfileState extends State<EditProfile> {
   final TextEditingController _subCategoryController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
-  // Store barangay code-to-name mapping
   Map<String, String> barangayMap = {};
 
   @override
@@ -42,7 +40,6 @@ class _EditProfileState extends State<EditProfile> {
     _fetchEstablishmentData();
   }
 
-  // Load barangay.json data and create a mapping of `brgy_code` to `brgy_name`
   Future<void> _loadBarangayData() async {
     final String response = await rootBundle.loadString('assets/barangay.json');
     final List<dynamic> data = json.decode(response);
@@ -63,36 +60,36 @@ class _EditProfileState extends State<EditProfile> {
               Map<String, dynamic>.from(event.snapshot.value as Map);
           var firstRecord =
               Map<String, dynamic>.from(establishmentData.values.first);
-
-          // Update text controllers with fetched data
           _updateControllers(firstRecord);
-        } else {
-          print('Establishment data not found for user.');
+        }
+
+        // Fetch profile image URL
+        DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/${user.uid}');
+        DatabaseEvent userEvent = await userRef.child('profile_image_url').once();
+
+        if (userEvent.snapshot.exists) {
+          setState(() {
+            _profileImageUrl = userEvent.snapshot.value as String;
+          });
         }
       } catch (e) {
         print('Failed to fetch establishment data: $e');
       }
-    } else {
-      print('No authenticated user found.');
     }
   }
 
-  // Populate controllers with fetched data, including decoded barangay name
   void _updateControllers(Map<String, dynamic> data) {
     setState(() {
       _establishmentName = data['establishmentName'] ?? '';
       _tourismType = data['tourismType'] ?? '';
-
-      // Decode barangay using the barangayMap
       String barangayCode = data['barangay'] ?? '';
       _barangay = barangayMap[barangayCode] ?? 'Unknown Barangay';
-
       _subCategory = data['subCategory'] ?? '';
       _email = data['email'] ?? '';
 
       _establishmentNameController.text = _establishmentName;
       _tourismTypeController.text = _tourismType;
-      _barangayController.text = _barangay; // Decoded barangay name
+      _barangayController.text = _barangay;
       _subCategoryController.text = _subCategory;
       _emailController.text = _email;
     });
@@ -107,7 +104,7 @@ class _EditProfileState extends State<EditProfile> {
         await dbRef.update({
           'establishmentName': _establishmentNameController.text,
           'tourismType': _tourismTypeController.text,
-          'barangay': _barangayController.text, // Store decoded barangay name
+          'barangay': _barangayController.text,
           'subCategory': _subCategoryController.text,
         });
         setState(() {
@@ -131,49 +128,47 @@ class _EditProfileState extends State<EditProfile> {
     }
   }
 
-  Future<void> _uploadImageToFirebase(XFile image) async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        // Use the user's email (or document ID) to create a unique file name
-        String email = user.email?.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_') ??
-            'unknown_user';
-        String fileName =
-            'Establishment/$email/profile_image/${DateTime.now().millisecondsSinceEpoch}.jpg';
-        Reference ref = FirebaseStorage.instance.ref().child(fileName);
-        await ref.putFile(File(image.path));
+ Future<void> _uploadImageToFirebase(XFile image) async {
+  User? user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    try {
+      // Specify the path for the upload, using an Establishment folder
+      String fileName = 'Establishment/${user.uid}/profile_image/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      Reference ref = FirebaseStorage.instance.ref().child(fileName);
+      
+      // Upload the file
+      TaskSnapshot uploadTask = await ref.putFile(File(image.path));
+      
+      // Get the download URL
+      String downloadUrl = await ref.getDownloadURL();
+      print("Download URL: $downloadUrl");
 
-        String downloadUrl = await ref.getDownloadURL();
+      // Update the Firebase Realtime Database with the new image URL
+      DatabaseReference dbRef = FirebaseDatabase.instance.ref('Users/${user.uid}');
+      await dbRef.update({
+        'profile_image_url': downloadUrl,
+      });
 
-        // Update Firestore with the new image URL
-        DatabaseReference dbRef =
-            FirebaseDatabase.instance.ref('Users/${user.uid}');
-        await dbRef.update({
-          'profile_image_url': downloadUrl,
-        });
+      setState(() {
+        _profileImageUrl = downloadUrl;
+      });
 
-        setState(() {
-          _profileImageUrl = downloadUrl;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Image uploaded successfully!')),
-          );
-        }
-      } catch (error) {
-        print('Failed to upload image: $error');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Failed to upload image. Please try again.')),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image uploaded successfully!')),
+        );
       }
-    } else {
-      print('No authenticated user found.');
+    } catch (error) {
+      print('Failed to upload image: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to upload image. Please try again.')),
+        );
+      }
     }
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -262,10 +257,13 @@ class _EditProfileState extends State<EditProfile> {
                           child: CircleAvatar(
                             backgroundColor: Colors.black,
                             radius: 55,
-                            backgroundImage: _profileImageUrl != null
-                                ? NetworkImage(_profileImageUrl!)
-                                : null,
-                            child: _profileImageUrl == null
+                            backgroundImage: _profileImage != null
+                                ? FileImage(_profileImage!)
+                                : (_profileImageUrl != null
+                                    ? NetworkImage(_profileImageUrl!)
+                                    : null),
+                            child: _profileImage == null &&
+                                    _profileImageUrl == null
                                 ? const Icon(Icons.person,
                                     color: Colors.white, size: 65)
                                 : null,
@@ -275,8 +273,7 @@ class _EditProfileState extends State<EditProfile> {
                           top: 80,
                           left: 170,
                           child: GestureDetector(
-                            onTap:
-                                _pickImage, // Trigger file picker and upload on tap
+                            onTap: _pickImage,
                             child: Container(
                               width: 50,
                               height: 50,
@@ -406,8 +403,7 @@ class _EditProfileState extends State<EditProfile> {
                                           filled: true,
                                           fillColor: Colors.grey[300],
                                         ),
-                                        isExpanded:
-                                            true, // Expands the dropdown to avoid overflow
+                                        isExpanded: true,
                                       ),
                                     )
                                   : _buildTextField(

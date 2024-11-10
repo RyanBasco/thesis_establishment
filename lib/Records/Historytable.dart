@@ -22,8 +22,7 @@ class _HistoryState extends State<History> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-      DatabaseEvent event =
-          await dbRef.orderByChild('email').equalTo(user.email).once();
+      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
 
       if (event.snapshot.exists) {
         var data = Map<String, dynamic>.from(event.snapshot.value as Map);
@@ -34,82 +33,57 @@ class _HistoryState extends State<History> {
   }
 
   Future<void> fetchVisitRecords() async {
-  if (userDocId == null) return;
+    if (userDocId == null) return;
 
-  // Fetch all visit records from the Visits node
-  DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
-  DatabaseEvent visitsEvent = await visitsRef.once();
+    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+    DatabaseEvent visitsEvent = await visitsRef.once();
 
-  DateFormat dateFormat1 = DateFormat('yyyy-MM-dd');
-  DateFormat dateFormat2 = DateFormat('yyyy-M-d');
+    List<Map<String, dynamic>> records = [];
 
-  List<Map<String, dynamic>> records = [];
+    if (visitsEvent.snapshot.exists) {
+      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-  // Only proceed if there are visit records
-  if (visitsEvent.snapshot.exists) {
-    var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
+      for (var entry in visitsData.entries) {
+        var data = Map<String, dynamic>.from(entry.value);
 
-    for (var entry in visitsData.entries) {
-      var data = Map<String, dynamic>.from(entry.value);
+        if (data['Establishment'] != null &&
+            data['Establishment']['EstablishmentID'] == userDocId) {
 
-      // Filter to include only records with matching EstablishmentID
-      if (data['EstablishmentID'] == userDocId) {
-        // Parse date and handle different formats
-        DateTime date;
-        if (data['Date'] is String) {
-          try {
-            date = dateFormat1.parse(data['Date']);
-          } catch (e) {
-            try {
-              date = dateFormat2.parse(data['Date']);
-            } catch (e) {
-              date = DateTime.now();
+          String category = data['Category'] ?? 'N/A';
+          double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+
+          String uid = data['User']?['UID'] ?? 'Unknown';
+          String firstName = 'Unknown';
+          String lastName = 'Unknown';
+
+          if (uid != 'Unknown') {
+            DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
+            DatabaseEvent userEvent = await userRef.once();
+
+            if (userEvent.snapshot.exists) {
+              var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+              firstName = userData['first_name'] ?? 'Unknown';
+              lastName = userData['last_name'] ?? 'Unknown';
             }
           }
-        } else {
-          date = DateTime.now();
+
+          String fullName = '$firstName $lastName';
+
+          records.add({
+            'Name': fullName,
+            'Category': category,
+            'TotalSpend': totalSpend,
+          });
         }
-
-        // Get category, total spend, and user ID for each record
-        String category = data['Category'] ?? 'N/A';
-        double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
-        String uid = data['UID'];
-
-        // Fetch user details for UID
-        DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
-        DatabaseEvent userEvent = await userRef.once();
-        String firstName = 'Unknown';
-        String lastName = 'Unknown';
-
-        if (userEvent.snapshot.exists) {
-          var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
-          firstName = userData['first_name'] ?? 'Unknown';
-          lastName = userData['last_name'] ?? 'Unknown';
-        }
-
-        String fullName = '$firstName $lastName';
-
-        // Add each visit record separately, even if it has the same name but different categories or spending
-        records.add({
-          'Name': fullName,
-          'Category': category,
-          'Date': date,
-          'TotalSpend': totalSpend,
-        });
       }
     }
+
+    if (mounted) {
+      setState(() {
+        visitRecords = records;
+      });
+    }
   }
-
-  // Update state with all matching visit records
-  if (mounted) {
-    setState(() {
-      visitRecords = records;
-    });
-  }
-}
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -132,8 +106,7 @@ class _HistoryState extends State<History> {
               ),
             ),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -174,137 +147,107 @@ class _HistoryState extends State<History> {
                     child: visitRecords.isEmpty
                         ? const Center(child: CircularProgressIndicator())
                         : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.vertical,
-                              child: Container(
+                            child: Container(
+                              decoration: BoxDecoration(
                                 color: Colors.white,
-                                padding: const EdgeInsets.all(8.0),
-                                child: Table(
-                                  border:
-                                      TableBorder.all(color: Colors.black54),
-                                  columnWidths: const {
-                                    0: FixedColumnWidth(150),
-                                    1: FixedColumnWidth(120),
-                                    2: FixedColumnWidth(100),
-                                    3: FixedColumnWidth(100),
-                                    4: FixedColumnWidth(120),
-                                  },
-                                  children: [
-                                    // Header row with enhanced styling
-                                    const TableRow(
-                                      decoration: const BoxDecoration(
-                                        color: Colors.black12,
-                                      ),
-                                      children: const [
-                                        Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text(
-                                            'Name',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text(
-                                            'Category',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text(
-                                            'Date',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text(
-                                            'Time',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Text(
-                                            'Total Spend',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    // Data rows with alternating row colors
-                                    ...visitRecords.asMap().entries.map(
-                                      (entry) {
-                                        int index = entry.key;
-                                        Map<String, dynamic> record =
-                                            entry.value;
-                                        return TableRow(
-                                          decoration: BoxDecoration(
-                                            color: index.isEven
-                                                ? Colors.grey[200]
-                                                : Colors.white,
-                                          ),
-                                          children: [
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Text(
-                                                record['Name'] ?? 'Unknown',
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Text(
-                                                record['Category'],
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Text(
-                                                DateFormat('yyyy-MM-dd')
-                                                    .format(record['Date']),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Text(
-                                                DateFormat('hh:mm a')
-                                                    .format(record['Date']),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.all(8.0),
-                                              child: Text(
-                                                '₱${record['TotalSpend'].toStringAsFixed(2)}',
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ],
+                                borderRadius: BorderRadius.circular(12.0),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 6.0,
+                                    offset: Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(8.0),
+                              child: Table(
+                                border: TableBorder(
+                                  horizontalInside: BorderSide(color: Colors.black12, width: 1),
+                                  verticalInside: BorderSide(color: Colors.black12, width: 1),
                                 ),
+                                columnWidths: const {
+                                  0: FlexColumnWidth(2),
+                                  1: FlexColumnWidth(2),
+                                  2: FlexColumnWidth(1.5),
+                                },
+                                children: [
+                                  // Header row
+                                  TableRow(
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade300,
+                                    ),
+                                    children: [
+                                      Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Text(
+                                          'Name',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Text(
+                                          'Category',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Text(
+                                          'Total Spend',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // Data rows with alternating colors
+                                  ...visitRecords.asMap().entries.map(
+                                    (entry) {
+                                      int index = entry.key;
+                                      Map<String, dynamic> record = entry.value;
+                                      return TableRow(
+                                        decoration: BoxDecoration(
+                                          color: index.isEven ? Colors.grey[200] : Colors.white,
+                                        ),
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              record['Name'] ?? 'Unknown',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              record['Category'],
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                              '₱${record['TotalSpend'].toStringAsFixed(2)}',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                           ),
