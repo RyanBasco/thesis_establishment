@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart'; // Import Realtime Database
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
-import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentSignuppage.dart';
+import 'package:thesis_establishment/Establishment%20Dasboard/ServiceOffered.dart';
+
+
 
 class EstablishmentLogin extends StatefulWidget {
   @override
@@ -42,11 +44,24 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
         password: _passwordController.text,
       );
 
-      // If login is successful, navigate to the DashboardPage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DashboardPage()),
-      );
+      // Check if the user is new by checking for the "Services" field in the database
+      final establishmentKey = event.snapshot.children.first.key; // Get the user's database key
+      final servicesRef = dbRef.child(establishmentKey!).child("Services");
+      DatabaseEvent servicesEvent = await servicesRef.once();
+
+      if (servicesEvent.snapshot.value == null) {
+        // New user (no services selected yet), navigate to TouristServiceSelection page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => TouristServiceSelection()),
+        );
+      } else {
+        // Existing user, navigate to Dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardPage()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       setState(() {
         if (e.code == 'user-not-found') {

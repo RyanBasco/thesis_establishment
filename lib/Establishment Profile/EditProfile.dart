@@ -132,13 +132,13 @@ class _EditProfileState extends State<EditProfile> {
   User? user = FirebaseAuth.instance.currentUser;
   if (user != null) {
     try {
-      // Specify the path for the upload, using an Establishment folder
-      String fileName = 'Establishment/${user.uid}/profile_image/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // Consistent file path
+      String fileName = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
       Reference ref = FirebaseStorage.instance.ref().child(fileName);
-      
+
       // Upload the file
       TaskSnapshot uploadTask = await ref.putFile(File(image.path));
-      
+
       // Get the download URL
       String downloadUrl = await ref.getDownloadURL();
       print("Download URL: $downloadUrl");
@@ -154,9 +154,11 @@ class _EditProfileState extends State<EditProfile> {
       });
 
       if (mounted) {
+        // Show success message and pass back the new URL
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image uploaded successfully!')),
         );
+        Navigator.pop(context, downloadUrl); // Return the new URL to EstablishmentProfile
       }
     } catch (error) {
       print('Failed to upload image: $error');
@@ -168,6 +170,7 @@ class _EditProfileState extends State<EditProfile> {
     }
   }
 }
+
 
 
   @override

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 import 'package:thesis_establishment/Spending%20Analysis/Inputvalue.dart';
 
@@ -15,8 +13,7 @@ class _ScanQRState extends State<ScanQR> {
   int _selectedIndex = 0;
   String? scannedCode;
   bool _isNavigated = false;
-  final DatabaseReference _databaseRef = FirebaseDatabase.instance.ref();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  
 
   void _onItemTapped(int index) {
     setState(() {
@@ -28,21 +25,6 @@ class _ScanQRState extends State<ScanQR> {
         context,
         MaterialPageRoute(builder: (context) => EstablishmentProfile()),
       );
-    }
-  }
-
-  Future<void> _createPendingReview(String userId) async {
-    final User? user = _auth.currentUser;
-    final String? establishmentId = user?.uid;
-
-    if (establishmentId != null) {
-      await _databaseRef.child('pendingReviews/$userId').set({
-        'status': 'pending',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'establishment_id': establishmentId,
-      });
-    } else {
-      print("No establishment ID found. Please ensure you're logged in.");
     }
   }
 
@@ -137,7 +119,6 @@ class _ScanQRState extends State<ScanQR> {
                                   _isNavigated = true;
                                 });
                                 print('QR Code found: $scannedCode');
-                                _createPendingReview(scannedCode!);
 
                                 Future.delayed(Duration(milliseconds: 500), () {
                                   Navigator.push(

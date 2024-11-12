@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:intl/intl.dart';
+import 'package:thesis_establishment/Records/Records.dart';
 
 class History extends StatefulWidget {
   @override
@@ -51,6 +51,8 @@ class _HistoryState extends State<History> {
 
           String category = data['Category'] ?? 'N/A';
           double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+          String date = data['Date'] ?? 'Unknown'; // Separate Date field
+          String time = data['Time'] ?? 'Unknown'; // Separate Time field
 
           String uid = data['User']?['UID'] ?? 'Unknown';
           String firstName = 'Unknown';
@@ -73,6 +75,8 @@ class _HistoryState extends State<History> {
             'Name': fullName,
             'Category': category,
             'TotalSpend': totalSpend,
+            'Date': date,   // Store Date separately
+            'Time': time,   // Store Time separately
           });
         }
       }
@@ -176,7 +180,7 @@ class _HistoryState extends State<History> {
                                     decoration: BoxDecoration(
                                       color: Colors.green.shade300,
                                     ),
-                                    children: [
+                                    children: const [
                                       Padding(
                                         padding: EdgeInsets.all(8.0),
                                         child: Text(
@@ -212,7 +216,7 @@ class _HistoryState extends State<History> {
                                       ),
                                     ],
                                   ),
-                                  // Data rows with alternating colors
+                                  // Data rows with navigation on whole row tap
                                   ...visitRecords.asMap().entries.map(
                                     (entry) {
                                       int index = entry.key;
@@ -222,25 +226,47 @@ class _HistoryState extends State<History> {
                                           color: index.isEven ? Colors.grey[200] : Colors.white,
                                         ),
                                         children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              record['Name'] ?? 'Unknown',
-                                              textAlign: TextAlign.center,
+                                          TableCell(
+                                            child: InkWell(
+                                              onTap: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => Records(
+                                                      name: record['Name'],
+                                                      category: record['Category'],
+                                                      totalSpend: record['TotalSpend'],
+                                                      date: record['Date'],
+                                                      time: record['Time'],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8.0),
+                                                child: Text(
+                                                  record['Name'] ?? 'Unknown',
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              record['Category'],
-                                              textAlign: TextAlign.center,
+                                          TableCell(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                record['Category'],
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                              '₱${record['TotalSpend'].toStringAsFixed(2)}',
-                                              textAlign: TextAlign.center,
+                                          TableCell(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: Text(
+                                                '₱${record['TotalSpend'].toStringAsFixed(2)}',
+                                                textAlign: TextAlign.center,
+                                              ),
                                             ),
                                           ),
                                         ],

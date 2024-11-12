@@ -41,6 +41,7 @@ dependencies:
   firebase_storage: ^12.3.4
   image_picker: ^1.1.2
   firebase_messaging: ^15.1.4
+  image_cropper: ^8.0.2
 
 
 

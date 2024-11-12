@@ -1,132 +1,232 @@
 import 'package:flutter/material.dart';
-import 'package:thesis_establishment/Records/Historytable.dart';
-import 'package:thesis_establishment/Records/Transactionslip.dart';
+import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart'; // Import EstablishmentProfile page
 
-class ClickPage extends StatelessWidget {
+class Records extends StatefulWidget {
+  final String name;
+  final String category;
+  final double totalSpend;
+  final String date;
+  final String time;
+
+  const Records({
+    Key? key,
+    required this.name,
+    required this.category,
+    required this.totalSpend,
+    required this.date,
+    required this.time,
+  }) : super(key: key);
+
+  @override
+  _RecordsState createState() => _RecordsState();
+}
+
+class _RecordsState extends State<Records> {
+  int _selectedIndex = 0;
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFFEEFFA9),
-                  Color(0xFFDBFF4C),
-                  Color(0xFF51F643),
-                ],
-                stops: [0.15, 0.54, 1.0],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFEEFFA9),
+              Color(0xFFDBFF4C),
+              Color(0xFF51F643),
+            ],
+            stops: [0.15, 0.54, 1.0],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          Center( // Center widget added here
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min, // Align content to the center vertically
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => Records()),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF288F13), // Button color
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    child: const Text(
-                      'Transaction Slip',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => History()),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF288F13), // Button color
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    child: const Text(
-                      'Visits',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 40.0,
-            left: 16.0,
-            child: Row(
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
                       child: Icon(
-                        Icons.arrow_back,
+                        Icons.close,
+                        color: Colors.black,
+                        size: 24.0,
+                      ),
+                    ),
+                    SizedBox(width: 65.0),
+                    Text(
+                      'Transaction Slip',
+                      style: TextStyle(
+                        fontSize: 22.0,
+                        fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 100),
-                const Text(
-                  'Option',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24,
+                SizedBox(height: 30.0),
+                ClipPath(
+                  clipper: ReceiptClipper(), // Custom Clipper for ripped edge
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 6.0,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Text(
+                            widget.name,
+                            style: TextStyle(
+                              fontSize: 22.0,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF288F13),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 20.0),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Date:',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            Text(
+                              widget.date,
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Color.fromARGB(255, 68, 68, 68),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 10.0),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Time:',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            Text(
+                              widget.time,
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Color.fromARGB(255, 68, 68, 68),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Divider(color: Colors.grey),
+                        SizedBox(height: 10.0),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Category:',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            Text(
+                              widget.category,
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Color.fromARGB(255, 68, 68, 68),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 10.0),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total Spend:',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            Text(
+                              '₱${widget.totalSpend.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.bold,
+                                color: Color.fromARGB(255, 68, 68, 68),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0, // Default selection for this page
-        onTap: (int index) {
-          // Add navigation logic if needed
-        },
-        items: const [
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: [
           BottomNavigationBarItem(
             icon: Icon(
               Icons.groups_3_outlined,
-              color: Color(0xFF288F13),
+              color: _selectedIndex == 0 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Community',
-            backgroundColor: Colors.white,
           ),
           BottomNavigationBarItem(
             icon: Icon(
               Icons.person,
-              color: Colors.black,
+              color: _selectedIndex == 1 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Personal',
-            backgroundColor: Colors.white,
           ),
         ],
         selectedItemColor: Color(0xFF288F13),
@@ -137,3 +237,29 @@ class ClickPage extends StatelessWidget {
     );
   }
 }
+
+// Custom Clipper for a ripped edge effect
+class ReceiptClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(0, size.height - 10); // Increase the height adjustment here
+
+    // Create a deeper zigzag or "ripped" edge effect
+    for (double i = 0; i < size.width; i += 20) { // Increase spacing between zigzags
+      path.relativeLineTo(10, 15); // Increase the height of the zigzag peak
+      path.relativeLineTo(10, -15); // Mirror for downward zigzag
+    }
+
+    path.lineTo(size.width, size.height - 10); // Match the height adjustment
+    path.lineTo(size.width, 0);
+    path.close();
+
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+

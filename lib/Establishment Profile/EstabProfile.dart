@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EditProfile.dart';
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
@@ -11,46 +12,57 @@ class EstablishmentProfile extends StatefulWidget {
 }
 
 class _EstablishmentProfileState extends State<EstablishmentProfile> {
-  int _selectedIndex = 1; // Default selection for bottom navigation bar
-  String establishmentName = 'Loading...'; // Placeholder for establishment name
+  int _selectedIndex = 1;
+  String establishmentName = 'Loading...';
+  String? profileImageUrl;
 
   @override
   void initState() {
     super.initState();
-    fetchEstablishmentName(); // Fetch establishment name on init
+    fetchEstablishmentData();
+    fetchProfileImageUrl();
   }
 
-  void fetchEstablishmentName() async {
-  User? user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    String email = user.email ?? '';
+  void fetchEstablishmentData() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      String email = user.email ?? '';
+      DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(email).once();
 
-    // Reference to Firebase Realtime Database
-    DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-
-    // Fetch establishment based on the email using a query
-    DatabaseEvent event = await dbRef.orderByChild('email').equalTo(email).once();
-
-    if (event.snapshot.exists) {
-      // Safely convert the snapshot value to Map<String, dynamic>
-      var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
-      var firstRecord = Map<String, dynamic>.from(establishmentData.values.first as Map);
-
-      setState(() {
-        establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
-      });
+      if (event.snapshot.exists) {
+        var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
+        var firstRecord = Map<String, dynamic>.from(establishmentData.values.first as Map);
+        setState(() {
+          establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
+        });
+      } else {
+        setState(() {
+          establishmentName = 'Establishment not found';
+        });
+      }
     } else {
       setState(() {
-        establishmentName = 'Establishment not found';
+        establishmentName = 'User not logged in';
       });
     }
-  } else {
-    setState(() {
-      establishmentName = 'User not logged in';
-    });
   }
-}
 
+  Future<void> fetchProfileImageUrl() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        String filePath = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
+        Reference storageRef = FirebaseStorage.instance.ref().child(filePath);
+        String downloadUrl = await storageRef.getDownloadURL();
+        setState(() {
+          profileImageUrl = downloadUrl;
+        });
+      } catch (e) {
+        print('Error fetching profile image: $e');
+      }
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -60,7 +72,7 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
     if (index == 0) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => DashboardPage()), // Navigate to DashboardPage
+        MaterialPageRoute(builder: (context) => DashboardPage()),
       );
     }
   }
@@ -73,11 +85,7 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
         height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFEEFFA9),
-              Color(0xFFDBFF4C),
-              Color(0xFF51F643),
-            ],
+            colors: [Color(0xFFEEFFA9), Color(0xFFDBFF4C), Color(0xFF51F643)],
             stops: [0.15, 0.54, 1.0],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -88,7 +96,7 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
             padding: const EdgeInsets.all(16.0),
             child: Container(
               width: double.infinity,
-              height: 400, // Adjust height as needed
+              height: 400,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -105,11 +113,8 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(
-                      top: 24.0,
-                      left: 24.0,
-                      right: 16.0,
-                      bottom: 24.0,
-                    ), // Adjusted padding
+                      top: 24.0, left: 24.0, right: 16.0, bottom: 24.0,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -117,20 +122,27 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                           width: 100,
                           height: 100,
                           decoration: BoxDecoration(
-                            color: Colors.black,
                             shape: BoxShape.circle,
+                            color: Colors.black,
+                            image: profileImageUrl != null
+                                ? DecorationImage(
+                                    image: NetworkImage(profileImageUrl!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                          child: Icon(
-                            Icons.person,
-                            color: Colors.white,
-                            size: 50,
-                          ),
-                          padding: EdgeInsets.all(16.0),
+                          child: profileImageUrl == null
+                              ? Icon(
+                                  Icons.person,
+                                  color: Colors.white,
+                                  size: 50,
+                                )
+                              : null,
                         ),
                         SizedBox(width: 16),
                         Expanded(
                           child: Text(
-                            establishmentName, // Display the establishment name
+                            establishmentName,
                             style: TextStyle(
                               fontSize: 21,
                               fontWeight: FontWeight.bold,
@@ -142,22 +154,24 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                       ],
                     ),
                   ),
-                  SizedBox(height: 16), // Spacer between profile and circles
-                  // First circle with Edit Profile
-                  buildCircleRow('Edit Profile', Icons.edit, Colors.black, () {
-                    Navigator.push(
+                  SizedBox(height: 16),
+                  buildCircleRow('Edit Profile', Icons.edit, Colors.black, () async {
+                    final updatedProfileImageUrl = await Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => EditProfile()),
+                      MaterialPageRoute(builder: (context) => EditProfile()),
                     );
+
+                    if (updatedProfileImageUrl != null) {
+                      setState(() {
+                        profileImageUrl = updatedProfileImageUrl;
+                      });
+                    }
                   }),
                   SizedBox(height: 16),
-                  // Third circle with Log Out
                   buildCircleRow('Log Out', Icons.logout, Colors.red, () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => EstablishmentLogin()),
+                      MaterialPageRoute(builder: (context) => EstablishmentLogin()),
                     );
                   }),
                 ],
@@ -195,10 +209,9 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
     );
   }
 
-  // Updated method to include navigation callback
   Widget buildCircleRow(String label, IconData icon, Color textColor, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap, // Handle circle row tap
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28.0),
         child: Row(
@@ -219,7 +232,7 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                     size: 24,
                   ),
                 ),
-                SizedBox(width: 16), // Space between circle and text
+                SizedBox(width: 16),
                 Text(
                   label,
                   style: TextStyle(
