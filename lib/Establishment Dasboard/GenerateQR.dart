@@ -1,8 +1,12 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 class GenerateQR extends StatefulWidget {
@@ -15,6 +19,7 @@ class _GenerateQRState extends State<GenerateQR> {
   String email = '';
   String establishmentName = 'Loading...';
   String documentId = '';
+  final ScreenshotController screenshotController = ScreenshotController();
 
   @override
   void initState() {
@@ -44,10 +49,7 @@ class _GenerateQRState extends State<GenerateQR> {
     if (user != null) {
       email = user.email ?? '';
 
-      // Reference to the Realtime Database
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-      
-      // Query to fetch data based on the user's email
       DataSnapshot snapshot = await dbRef.orderByChild('email').equalTo(email).get();
 
       if (mounted) {
@@ -57,7 +59,7 @@ class _GenerateQRState extends State<GenerateQR> {
 
           setState(() {
             establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
-            documentId = snapshot.children.first.key ?? ''; // Retrieve document ID
+            documentId = snapshot.children.first.key ?? '';
           });
         } else {
           setState(() {
@@ -71,6 +73,36 @@ class _GenerateQRState extends State<GenerateQR> {
           establishmentName = 'User not logged in';
         });
       }
+    }
+  }
+
+  Future<void> _saveQrToGallery() async {
+    final status = await Permission.storage.request();
+
+    if (status.isGranted) {
+      final Uint8List? image = await screenshotController.capture();
+
+      if (image != null) {
+        final result = await ImageGallerySaver.saveImage(
+          Uint8List.fromList(image),
+          quality: 100,
+          name: "QR_Code_${DateTime.now().millisecondsSinceEpoch}",
+        );
+
+        if (result['isSuccess']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("QR code saved to gallery!")),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to save QR code.")),
+          );
+        }
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Storage permission denied.")),
+      );
     }
   }
 
@@ -132,46 +164,66 @@ class _GenerateQRState extends State<GenerateQR> {
                     ),
                   ],
                 ),
-                SizedBox(height: 40.h),
-                Container(
-                  width: double.infinity,
-                  height: 350.h,
-                  padding: EdgeInsets.all(20.0.w),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16.r),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 6.0,
-                        offset: Offset(0, 3),
+                Spacer(),
+                Center(
+                  child: Screenshot(
+                    controller: screenshotController,
+                    child: Container(
+                      width: 280,
+                      height: 330,
+                      padding: EdgeInsets.all(20.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 6.0,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      email.isEmpty
-                          ? CircularProgressIndicator()
-                          : QrImageView(
-                              data: documentId,
-                              version: QrVersions.auto,
-                              size: 200.w,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          email.isEmpty
+                              ? CircularProgressIndicator()
+                              : QrImageView(
+                                  data: documentId,
+                                  version: QrVersions.auto,
+                                  size: 180.w,
+                                ),
+                          SizedBox(height: 10.h),
+                          Text(
+                            establishmentName,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF288F13),
                             ),
-                      SizedBox(height: 20.h),
-                      Text(
-                        establishmentName,
-                        style: TextStyle(
-                          fontSize: 25.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF288F13),
-                        ),
-                        textAlign: TextAlign.center,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-                SizedBox(height: 40.h),
+                SizedBox(height: 40),
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _saveQrToGallery,
+                    icon: const Icon(Icons.save_alt, color: Colors.white),
+                    label: const Text("Save to Gallery", style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF288F13),
+                      padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
+                    ),
+                  ),
+                ),
+                Spacer(),
               ],
             ),
           ),

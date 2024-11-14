@@ -28,13 +28,17 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
     if (user != null) {
       String email = user.email ?? '';
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(email).once();
+      DatabaseEvent event =
+          await dbRef.orderByChild('email').equalTo(email).once();
 
       if (event.snapshot.exists) {
-        var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
-        var firstRecord = Map<String, dynamic>.from(establishmentData.values.first as Map);
+        var establishmentData =
+            Map<String, dynamic>.from(event.snapshot.value as Map);
+        var firstRecord =
+            Map<String, dynamic>.from(establishmentData.values.first as Map);
         setState(() {
-          establishmentName = firstRecord['establishmentName'] ?? 'No Name Available';
+          establishmentName =
+              firstRecord['establishmentName'] ?? 'No Name Available';
         });
       } else {
         setState(() {
@@ -52,7 +56,8 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        String filePath = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
+        String filePath =
+            'Establishment/${user.uid}/profile_image/latest_image.jpg';
         Reference storageRef = FirebaseStorage.instance.ref().child(filePath);
         String downloadUrl = await storageRef.getDownloadURL();
         setState(() {
@@ -113,7 +118,10 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(
-                      top: 24.0, left: 24.0, right: 16.0, bottom: 24.0,
+                      top: 24.0,
+                      left: 24.0,
+                      right: 16.0,
+                      bottom: 24.0,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -155,7 +163,8 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                     ),
                   ),
                   SizedBox(height: 16),
-                  buildCircleRow('Edit Profile', Icons.edit, Colors.black, () async {
+                  buildCircleRow('Edit Profile', Icons.edit, Colors.black,
+                      () async {
                     final updatedProfileImageUrl = await Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => EditProfile()),
@@ -169,9 +178,13 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                   }),
                   SizedBox(height: 16),
                   buildCircleRow('Log Out', Icons.logout, Colors.red, () {
-                    Navigator.push(
+                    FirebaseAuth.instance.signOut();
+                    Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => EstablishmentLogin()),
+                      MaterialPageRoute(
+                          builder: (context) => EstablishmentLogin()),
+                      (Route<dynamic> route) =>
+                          false, // Clears all previous routes
                     );
                   }),
                 ],
@@ -209,7 +222,8 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
     );
   }
 
-  Widget buildCircleRow(String label, IconData icon, Color textColor, VoidCallback onTap) {
+  Widget buildCircleRow(
+      String label, IconData icon, Color textColor, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Padding(

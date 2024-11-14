@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:thesis_establishment/Records/Records.dart';
+import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 class History extends StatefulWidget {
   @override
@@ -11,6 +12,7 @@ class History extends StatefulWidget {
 class _HistoryState extends State<History> {
   String? userDocId;
   List<Map<String, dynamic>> visitRecords = [];
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -51,8 +53,8 @@ class _HistoryState extends State<History> {
 
           String category = data['Category'] ?? 'N/A';
           double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
-          String date = data['Date'] ?? 'Unknown'; // Separate Date field
-          String time = data['Time'] ?? 'Unknown'; // Separate Time field
+          String date = data['Date'] ?? 'Unknown';
+          String time = data['Time'] ?? 'Unknown';
 
           String uid = data['User']?['UID'] ?? 'Unknown';
           String firstName = 'Unknown';
@@ -75,8 +77,8 @@ class _HistoryState extends State<History> {
             'Name': fullName,
             'Category': category,
             'TotalSpend': totalSpend,
-            'Date': date,   // Store Date separately
-            'Time': time,   // Store Time separately
+            'Date': date,
+            'Time': time,
           });
         }
       }
@@ -86,6 +88,19 @@ class _HistoryState extends State<History> {
       setState(() {
         visitRecords = records;
       });
+    }
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
+      );
     }
   }
 
@@ -285,15 +300,13 @@ class _HistoryState extends State<History> {
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (int index) {
-          // Add navigation logic if needed
-        },
-        items: const [
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: [
           BottomNavigationBarItem(
             icon: Icon(
               Icons.groups_3_outlined,
-              color: Color(0xFF288F13),
+              color: _selectedIndex == 0 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Community',
             backgroundColor: Colors.white,
@@ -301,7 +314,7 @@ class _HistoryState extends State<History> {
           BottomNavigationBarItem(
             icon: Icon(
               Icons.person,
-              color: Colors.black,
+              color: _selectedIndex == 1 ? Color(0xFF288F13) : Colors.black,
             ),
             label: 'Personal',
             backgroundColor: Colors.white,

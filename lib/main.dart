@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/Landingpage.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';  // Import ScreenUtil package
+import 'package:flutter_screenutil/flutter_screenutil.dart'; // Import ScreenUtil package
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,18 +39,30 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-      designSize: const Size(360, 650),  // Set base design size
-      minTextAdapt: true,                // Make text scalable
-      splitScreenMode: true,             // Support split screen
+      designSize: const Size(360, 650), // Set base design size
+      minTextAdapt: true, // Make text scalable
+      splitScreenMode: true, // Support split screen
       builder: (context, child) {
         return MaterialApp(
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
             useMaterial3: true,
           ),
-          home: LandingPage(),  // Use LandingPage
+          home: _handleAuthState(), // Redirect based on authentication
         );
       },
     );
   }
+
+    Widget _handleAuthState() {
+    // Check if a user is already signed in
+    if (FirebaseAuth.instance.currentUser != null) {
+      // User is signed in, direct to the EstablishmentLogin page
+      return EstablishmentLogin();
+    } else {
+      // No user is signed in, direct to the LandingPage
+      return LandingPage();
+    }
+  }
 }
+

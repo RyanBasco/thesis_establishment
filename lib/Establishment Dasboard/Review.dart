@@ -192,49 +192,53 @@ class _ReviewState extends State<Review> {
   }
 
   // Summary section with star counts
-  Widget _buildSummarySection() {
-    int totalRatings = starCounts.values.reduce((a, b) => a + b);
-    double averageRating = totalRatings > 0
-        ? (starCounts.entries.fold(0, (sum, entry) => sum + entry.key * entry.value) / totalRatings)
-        : 0.0;
+  // Summary section with star counts
+Widget _buildSummarySection() {
+  int totalRatings = starCounts.values.reduce((a, b) => a + b);
+  double averageRating = totalRatings > 0
+      ? (starCounts.entries.fold(0, (sum, entry) => sum + entry.key * entry.value) / totalRatings)
+      : 0.0;
 
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                averageRating.toStringAsFixed(1),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
-              ),
-              Row(
-                children: List.generate(5, (index) {
-                  return Icon(
-                    Icons.star,
-                    color: index < averageRating ? Colors.yellow : Colors.grey,
-                    size: 20.5,
-                  );
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(width: 20),
-          Column(
-            children: [
-              _buildStarCountRow('All', totalRatings, null),
-              _buildStarCountRow('5 Star', starCounts[5]!, 5),
-              _buildStarCountRow('4 Star', starCounts[4]!, 4),
-              _buildStarCountRow('3 Star', starCounts[3]!, 3),
-              _buildStarCountRow('2 Star', starCounts[2]!, 2),
-              _buildStarCountRow('1 Star', starCounts[1]!, 1),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  return Padding(
+    padding: const EdgeInsets.all(20.0),
+    child: Row(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              averageRating.toStringAsFixed(1),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
+            ),
+            Row(
+              children: List.generate(5, (index) {
+                if (index < averageRating.floor()) {
+                  return const Icon(Icons.star, color: Colors.yellow, size: 20.5);
+                } else if (index < averageRating) {
+                  return const Icon(Icons.star_half, color: Colors.yellow, size: 20.5);
+                } else {
+                  return const Icon(Icons.star_border, color: Colors.grey, size: 20.5);
+                }
+              }),
+            ),
+          ],
+        ),
+        const SizedBox(width: 20),
+        Column(
+          children: [
+            _buildStarCountRow('All', totalRatings, null),
+            _buildStarCountRow('5 Star', starCounts[5]!, 5),
+            _buildStarCountRow('4 Star', starCounts[4]!, 4),
+            _buildStarCountRow('3 Star', starCounts[3]!, 3),
+            _buildStarCountRow('2 Star', starCounts[2]!, 2),
+            _buildStarCountRow('1 Star', starCounts[1]!, 1),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
 
   // Helper to create star count row with filter functionality
   Widget _buildStarCountRow(String label, int count, int? ratingFilter) {

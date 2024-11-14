@@ -24,8 +24,7 @@ class _EditProfileState extends State<EditProfile> {
   File? _profileImage;
 
   bool _isEditing = false;
-  final TextEditingController _establishmentNameController =
-      TextEditingController();
+  final TextEditingController _establishmentNameController = TextEditingController();
   final TextEditingController _tourismTypeController = TextEditingController();
   final TextEditingController _barangayController = TextEditingController();
   final TextEditingController _subCategoryController = TextEditingController();
@@ -50,28 +49,23 @@ class _EditProfileState extends State<EditProfile> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        DatabaseReference dbRef =
-            FirebaseDatabase.instance.ref('establishments');
-        DatabaseEvent event =
-            await dbRef.orderByChild('email').equalTo(user.email).once();
+        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
+        DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
 
         if (event.snapshot.exists) {
-          var establishmentData =
-              Map<String, dynamic>.from(event.snapshot.value as Map);
-          var firstRecord =
-              Map<String, dynamic>.from(establishmentData.values.first);
+          var establishmentData = Map<String, dynamic>.from(event.snapshot.value as Map);
+          var firstRecord = Map<String, dynamic>.from(establishmentData.values.first);
           _updateControllers(firstRecord);
         }
 
-        // Fetch profile image URL
-        DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/${user.uid}');
-        DatabaseEvent userEvent = await userRef.child('profile_image_url').once();
+        // Fetch profile image URL directly from Firebase Storage
+        String fileName = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
+        Reference ref = FirebaseStorage.instance.ref().child(fileName);
+        String downloadUrl = await ref.getDownloadURL();
 
-        if (userEvent.snapshot.exists) {
-          setState(() {
-            _profileImageUrl = userEvent.snapshot.value as String;
-          });
-        }
+        setState(() {
+          _profileImageUrl = downloadUrl;
+        });
       } catch (e) {
         print('Failed to fetch establishment data: $e');
       }
@@ -99,8 +93,7 @@ class _EditProfileState extends State<EditProfile> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        DatabaseReference dbRef =
-            FirebaseDatabase.instance.ref('establishments/${user.uid}');
+        DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments/${user.uid}');
         await dbRef.update({
           'establishmentName': _establishmentNameController.text,
           'tourismType': _tourismTypeController.text,
@@ -128,50 +121,37 @@ class _EditProfileState extends State<EditProfile> {
     }
   }
 
- Future<void> _uploadImageToFirebase(XFile image) async {
-  User? user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    try {
-      // Consistent file path
-      String fileName = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
-      Reference ref = FirebaseStorage.instance.ref().child(fileName);
+  Future<void> _uploadImageToFirebase(XFile image) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        String fileName = 'Establishment/${user.uid}/profile_image/latest_image.jpg';
+        Reference ref = FirebaseStorage.instance.ref().child(fileName);
 
-      // Upload the file
-      TaskSnapshot uploadTask = await ref.putFile(File(image.path));
+        // Upload the file
+        await ref.putFile(File(image.path));
 
-      // Get the download URL
-      String downloadUrl = await ref.getDownloadURL();
-      print("Download URL: $downloadUrl");
+        // Refresh the profile image URL by fetching directly from Firebase Storage
+        String downloadUrl = await ref.getDownloadURL();
+        setState(() {
+          _profileImageUrl = downloadUrl;
+        });
 
-      // Update the Firebase Realtime Database with the new image URL
-      DatabaseReference dbRef = FirebaseDatabase.instance.ref('Users/${user.uid}');
-      await dbRef.update({
-        'profile_image_url': downloadUrl,
-      });
-
-      setState(() {
-        _profileImageUrl = downloadUrl;
-      });
-
-      if (mounted) {
-        // Show success message and pass back the new URL
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image uploaded successfully!')),
-        );
-        Navigator.pop(context, downloadUrl); // Return the new URL to EstablishmentProfile
-      }
-    } catch (error) {
-      print('Failed to upload image: $error');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to upload image. Please try again.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image uploaded successfully!')),
+          );
+        }
+      } catch (error) {
+        print('Failed to upload image: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload image. Please try again.')),
+          );
+        }
       }
     }
   }
-}
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -265,10 +245,8 @@ class _EditProfileState extends State<EditProfile> {
                                 : (_profileImageUrl != null
                                     ? NetworkImage(_profileImageUrl!)
                                     : null),
-                            child: _profileImage == null &&
-                                    _profileImageUrl == null
-                                ? const Icon(Icons.person,
-                                    color: Colors.white, size: 65)
+                            child: _profileImage == null && _profileImageUrl == null
+                                ? const Icon(Icons.person, color: Colors.white, size: 65)
                                 : null,
                           ),
                         ),
@@ -307,22 +285,17 @@ class _EditProfileState extends State<EditProfile> {
                               const SizedBox(height: 20),
                               _isEditing
                                   ? DropdownButtonFormField<String>(
-                                      value: _tourismType.isNotEmpty &&
-                                              ['primary', 'secondary']
-                                                  .contains(_tourismType)
+                                      value: _tourismType.isNotEmpty && ['primary', 'secondary'].contains(_tourismType)
                                           ? _tourismType
                                           : null,
-                                      items: ['primary', 'secondary']
-                                          .map((type) => DropdownMenuItem(
-                                                value: type,
-                                                child: Text(type),
-                                              ))
-                                          .toList(),
+                                      items: ['primary', 'secondary'].map((type) => DropdownMenuItem(
+                                            value: type,
+                                            child: Text(type),
+                                          )).toList(),
                                       onChanged: (value) {
                                         setState(() {
                                           _tourismType = value ?? '';
-                                          _tourismTypeController.text =
-                                              _tourismType;
+                                          _tourismTypeController.text = _tourismType;
                                         });
                                       },
                                       decoration: InputDecoration(
@@ -333,8 +306,7 @@ class _EditProfileState extends State<EditProfile> {
                                           color: Color(0xFF2C812A),
                                         ),
                                         border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(8),
                                           borderSide: BorderSide.none,
                                         ),
                                         filled: true,
@@ -355,8 +327,7 @@ class _EditProfileState extends State<EditProfile> {
                               const SizedBox(height: 20),
                               _isEditing
                                   ? Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 0),
+                                      padding: const EdgeInsets.symmetric(horizontal: 0),
                                       child: DropdownButtonFormField<String>(
                                         value: _subCategory.isNotEmpty &&
                                                 [
@@ -376,19 +347,14 @@ class _EditProfileState extends State<EditProfile> {
                                           'Meetings, Incentives, Conventions and Exhibitions (MICE)',
                                           'Adventure/ Sports and Ecotourism Facilities',
                                           'Tourism Frontliner'
-                                        ]
-                                            .map((category) => DropdownMenuItem(
-                                                  value: category,
-                                                  child: Text(category,
-                                                      overflow: TextOverflow
-                                                          .ellipsis),
-                                                ))
-                                            .toList(),
+                                        ].map((category) => DropdownMenuItem(
+                                              value: category,
+                                              child: Text(category, overflow: TextOverflow.ellipsis),
+                                            )).toList(),
                                         onChanged: (value) {
                                           setState(() {
                                             _subCategory = value ?? '';
-                                            _subCategoryController.text =
-                                                _subCategory;
+                                            _subCategoryController.text = _subCategory;
                                           });
                                         },
                                         decoration: InputDecoration(
@@ -399,8 +365,7 @@ class _EditProfileState extends State<EditProfile> {
                                             color: Color(0xFF2C812A),
                                           ),
                                           border: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(8),
                                             borderSide: BorderSide.none,
                                           ),
                                           filled: true,
@@ -434,22 +399,19 @@ class _EditProfileState extends State<EditProfile> {
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Color(0xFF288F13),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 30, vertical: 15),
+                                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                                   ),
                                 ),
                               if (_isEditing)
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     ElevatedButton(
                                       onPressed: () {
                                         setState(() {
                                           _isEditing = false;
                                           _updateControllers({
-                                            'establishmentName':
-                                                _establishmentName,
+                                            'establishmentName': _establishmentName,
                                             'tourismType': _tourismType,
                                             'barangay': _barangay,
                                             'subCategory': _subCategory,
@@ -463,8 +425,7 @@ class _EditProfileState extends State<EditProfile> {
                                       ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.red,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 30, vertical: 15),
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                                       ),
                                     ),
                                     ElevatedButton(
@@ -475,8 +436,7 @@ class _EditProfileState extends State<EditProfile> {
                                       ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Color(0xFF288F13),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 30, vertical: 15),
+                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                                       ),
                                     ),
                                   ],
