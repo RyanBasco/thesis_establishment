@@ -4,6 +4,8 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EditProfile.dart';
+import 'package:thesis_establishment/Establishment%20Profile/Editpassword.dart';
+import 'package:thesis_establishment/Establishment%20Profile/TermsandConditions.dart';
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
 
 class EstablishmentProfile extends StatefulWidget {
@@ -80,6 +82,13 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
         MaterialPageRoute(builder: (context) => DashboardPage()),
       );
     }
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
+      );
+    }
   }
 
   @override
@@ -101,7 +110,7 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
             padding: const EdgeInsets.all(16.0),
             child: Container(
               width: double.infinity,
-              height: 400,
+              height: 500, // Adjusted to accommodate additional rows
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -175,6 +184,21 @@ class _EstablishmentProfileState extends State<EstablishmentProfile> {
                         profileImageUrl = updatedProfileImageUrl;
                       });
                     }
+                  }),
+                  SizedBox(height: 16),
+                  buildCircleRow('Edit Password', Icons.lock, Colors.black, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => EditPassword()),
+                    );
+                  }),
+                  SizedBox(height: 16),
+                  buildCircleRow(
+                      'Privacy Policy', Icons.privacy_tip, Colors.black, () {
+                     Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => TermsAndConditions()),
+                    );
                   }),
                   SizedBox(height: 16),
                   buildCircleRow('Log Out', Icons.logout, Colors.red, () {

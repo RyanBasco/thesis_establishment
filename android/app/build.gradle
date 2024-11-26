@@ -1,15 +1,14 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
     id 'com.google.gms.google-services'
 }
 
 android {
     namespace = "com.example.thesis_establishment"
-    compileSdk = 34 // Set the compileSdk version as per your requirements
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 34
+    ndkVersion = "21.4.7075529"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -21,18 +20,15 @@ android {
     }
 
     defaultConfig {
-        // Specify your own unique Application ID.
         applicationId = "com.example.thesis_establishment"
-        minSdk = 23 // Updated to 23 to meet firebase_auth requirements
-        targetSdk = 34 // Set the targetSdk version as per your requirements
+        minSdk = 23
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            // Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
         }
     }
@@ -44,5 +40,14 @@ flutter {
 
 dependencies {
     implementation platform('com.google.firebase:firebase-bom:33.5.1')
-    implementation 'com.google.firebase:firebase-auth' // Example of including Firebase authentication
+    implementation 'com.google.firebase:firebase-auth'
+
+    // Add exclusion rule to avoid dependency on androidx.core:core-ktx
+}
+
+// Optionally, force an older version of core-ktx to ensure compatibility
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core-ktx:1.6.0'
+    }
 }

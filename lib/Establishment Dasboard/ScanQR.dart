@@ -9,11 +9,34 @@ class ScanQR extends StatefulWidget {
   _ScanQRState createState() => _ScanQRState();
 }
 
-class _ScanQRState extends State<ScanQR> {
+class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   String? scannedCode;
   bool _isNavigated = false;
-  
+  MobileScannerController scannerController = MobileScannerController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    scannerController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Handle camera lifecycle for better performance
+    if (state == AppLifecycleState.resumed && !_isNavigated) {
+      scannerController.start();
+    } else if (state == AppLifecycleState.paused) {
+      scannerController.stop();
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -108,6 +131,7 @@ class _ScanQRState extends State<ScanQR> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: MobileScanner(
+                          controller: scannerController,
                           onDetect: (BarcodeCapture barcodeCapture) {
                             if (_isNavigated) return;
 
@@ -120,7 +144,7 @@ class _ScanQRState extends State<ScanQR> {
                                 });
                                 print('QR Code found: $scannedCode');
 
-                                Future.delayed(Duration(milliseconds: 500), () {
+                                Future.delayed(const Duration(milliseconds: 500), () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -131,6 +155,7 @@ class _ScanQRState extends State<ScanQR> {
                                     setState(() {
                                       _isNavigated = false;
                                       scannedCode = null;
+                                      scannerController.start(); // Restart the scanner
                                     });
                                   });
                                 });

@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
+import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 class EditProfile extends StatefulWidget {
   const EditProfile({Key? key}) : super(key: key);
@@ -15,6 +17,7 @@ class EditProfile extends StatefulWidget {
 }
 
 class _EditProfileState extends State<EditProfile> {
+  int _selectedIndex = 1;
   String _establishmentName = '';
   String _tourismType = '';
   String _barangay = '';
@@ -37,6 +40,26 @@ class _EditProfileState extends State<EditProfile> {
     super.initState();
     _loadBarangayData();
     _fetchEstablishmentData();
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    if (index == 0) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => DashboardPage()),
+      );
+    }
+
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => EstablishmentProfile()),
+      );
+    }
   }
 
   Future<void> _loadBarangayData() async {
@@ -454,8 +477,8 @@ class _EditProfileState extends State<EditProfile> {
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 1,
-        onTap: (int index) {},
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.groups_3_outlined, color: Colors.black),

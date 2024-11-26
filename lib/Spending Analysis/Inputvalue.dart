@@ -13,18 +13,16 @@ class Inputvalue extends StatefulWidget {
 }
 
 class _InputvalueState extends State<Inputvalue> {
-  final TextEditingController _totalSpendController = TextEditingController();
   String? fullName;
-  String? selectedCategory;
   bool isLoading = false;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  List<String> filteredCategories = []; // Stores categories filtered based on selected services
+  List<Map<String, dynamic>> categoryInputs = []; // Contains categories with checkbox and controller
 
   @override
   void initState() {
     super.initState();
     fetchUserData();
-    fetchEstablishmentServices(); // Fetch services selected by the establishment
+    fetchEstablishmentServices();
   }
 
   // Fetch user details from 'Users' node
@@ -47,7 +45,7 @@ class _InputvalueState extends State<Inputvalue> {
     }
   }
 
-  // Fetch establishment's selected services from 'establishments' node
+  // Fetch establishment's selected services
   Future<void> fetchEstablishmentServices() async {
     final userEmail = _auth.currentUser?.email;
     if (userEmail != null) {
@@ -61,7 +59,13 @@ class _InputvalueState extends State<Inputvalue> {
         List<dynamic> services = establishmentDetails['Services'] ?? [];
 
         setState(() {
-          filteredCategories = List<String>.from(services); // Set the filtered categories
+          categoryInputs = services.map((service) {
+            return {
+              'category': service,
+              'controller': TextEditingController(),
+              'selected': false, // Checkbox state
+            };
+          }).toList();
         });
       } else {
         print("Establishment not found for this user.");
@@ -71,115 +75,84 @@ class _InputvalueState extends State<Inputvalue> {
     }
   }
 
-  // Create pending review after saving data
-  Future<void> _createPendingReview(String userId) async {
-    final User? user = _auth.currentUser;
-    final String? establishmentId = user?.uid;
-
-    if (establishmentId != null) {
-      await FirebaseDatabase.instance.ref().child('pendingReviews/$userId').set({
-        'status': 'pending',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'establishment_id': establishmentId,
+  // Save data to Firebase
+  // Save data to Firebase
+Future<void> saveData() async {
+  final userEmail = _auth.currentUser?.email;
+  if (userEmail != null) {
+    if (categoryInputs.isNotEmpty && fullName != null) {
+      setState(() {
+        isLoading = true;
       });
-    } else {
-      print("No establishment ID found. Please ensure you're logged in.");
-    }
-  }
 
-  // Save data to the 'Visits' node
-  Future<void> saveData() async {
-    final userEmail = _auth.currentUser?.email;
-    if (userEmail != null) {
-      final totalSpend = _totalSpendController.text.trim();
-      if (totalSpend.isNotEmpty && fullName != null) {
-        setState(() {
-          isLoading = true;
-        });
+      final now = DateTime.now();
+      String documentID = widget.scannedCode.trim();
+      DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+      DatabaseReference establishmentRef = FirebaseDatabase.instance.ref('establishments');
+      DataSnapshot establishmentSnapshot = await establishmentRef.orderByChild('email').equalTo(userEmail).get();
 
-        final now = DateTime.now();
-        String documentID = widget.scannedCode.trim();
-        DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits').push();
-        DatabaseReference establishmentRef = FirebaseDatabase.instance.ref('establishments');
-        DataSnapshot establishmentSnapshot = await establishmentRef.orderByChild('email').equalTo(userEmail).get();
+      if (establishmentSnapshot.exists) {
+        // Fetch establishment details directly
+        var establishmentData = Map<String, dynamic>.from(establishmentSnapshot.value as Map);
+        String establishmentDocID = establishmentData.keys.first;
+        var establishmentDetails = establishmentData[establishmentDocID]; // Full details of establishment
 
-        if (establishmentSnapshot.exists) {
-          var establishmentData = Map<String, dynamic>.from(establishmentSnapshot.value as Map);
-          String establishmentDocID = establishmentData.keys.first;
-          var establishmentDetails = establishmentData[establishmentDocID];
+        for (var input in categoryInputs.where((item) => item['selected'])) {
+          final category = input['category'];
+          final totalSpend = double.tryParse(input['controller'].text.trim());
 
-          DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$documentID');
-          DatabaseEvent userEvent = await userRef.once();
-          if (userEvent.snapshot.exists) {
-            var userDetails = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
-
-            await visitsRef.set({
-              'TotalSpend': double.tryParse(totalSpend),
-              'Category': selectedCategory,
+          if (totalSpend != null && totalSpend > 0) {
+            await visitsRef.push().set({
+              'TotalSpend': totalSpend,
+              'Category': category,
               'Date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
               'Time': '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
               'User': {
                 'UID': documentID,
-                'first_name': userDetails['first_name'],
-                'last_name': userDetails['last_name'],
-                'birthday': userDetails['birthday'],
-                'city': userDetails['city'],
-                'civil_status': userDetails['civil_status'],
-                'contact_number': userDetails['contact_number'],
-                'countryOfResidence': userDetails['countryOfResidence'],
-                'email': userDetails['email'],
-                'nationality': userDetails['nationality'],
-                'province': userDetails['province'],
-                'purpose_of_travel': userDetails['purpose_of_travel'],
-                'region': userDetails['region'],
-                'sex': userDetails['sex']
+                'fullName': fullName,
               },
+              // Add establishment details directly here
               'Establishment': {
                 'EstablishmentID': establishmentDocID,
+                'email': establishmentDetails['email'],
+                'establishmentName': establishmentDetails['establishmentName'],
                 'barangay': establishmentDetails['barangay'],
                 'city': establishmentDetails['city'],
                 'contact': establishmentDetails['contact'],
-                'email': establishmentDetails['email'],
-                'establishmentName': establishmentDetails['establishmentName'],
-                'subCategory': establishmentDetails['subCategory'],
-                'tourismType': establishmentDetails['tourismType']
+                'tourismType': establishmentDetails['tourismType'],
               }
             });
-
-            await _createPendingReview(documentID);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Data saved successfully!')),
-            );
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ScanQR()),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('User data not found.')),
-            );
           }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Establishment not found for this user.')),
-          );
         }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data saved successfully!')),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ScanQR()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter the total spend and ensure the full name is available.')),
+          const SnackBar(content: Text('Establishment not found for this user.')),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not found.')),
+        const SnackBar(content: Text('Please select at least one category and enter the spend amount.')),
       );
     }
-    setState(() {
-      isLoading = false;
-    });
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('User not found.')),
+    );
   }
+  setState(() {
+    isLoading = false;
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -208,6 +181,7 @@ class _InputvalueState extends State<Inputvalue> {
             child: Container(
               width: 350,
               padding: const EdgeInsets.all(20.0),
+              margin: const EdgeInsets.symmetric(vertical: 20), // Adds spacing between white boxes
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -231,62 +205,54 @@ class _InputvalueState extends State<Inputvalue> {
                       color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Full Name:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
                   const SizedBox(height: 10),
                   Text(
-                    displayName,
+                    'Full Name: $displayName',
                     style: const TextStyle(fontSize: 18, color: Colors.black),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
                   const Text(
                     'Categories:',
-                    style: TextStyle(fontSize: 18, color: Colors.black),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.black),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: DropdownButton<String>(
-                      value: selectedCategory,
-                      hint: const Text('Select a category'),
-                      isExpanded: true,
-                      items: filteredCategories.map((String category) {
-                        return DropdownMenuItem<String>(
-                          value: category,
-                          child: Text(category),
+                  const SizedBox(height: 5), // Reduced spacing
+                  SizedBox(
+                    height: 200, // Limit the height for better layout
+                    child: ListView.builder(
+                      itemCount: categoryInputs.length,
+                      itemBuilder: (context, index) {
+                        final input = categoryInputs[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0), // Adds spacing between rows
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: input['selected'] ?? false,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    input['selected'] = value ?? false;
+                                  });
+                                },
+                              ),
+                              Expanded(
+                                child: Text(input['category']),
+                              ),
+                              SizedBox(
+                                width: 100,
+                                child: TextField(
+                                  controller: input['controller'],
+                                  keyboardType: TextInputType.number,
+                                  enabled: input['selected'],
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    hintText: '0',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedCategory = newValue;
-                        });
                       },
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Total Spend:',
-                    style: TextStyle(fontSize: 18, color: Colors.black),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _totalSpendController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Enter amount',
                     ),
                   ),
                   const SizedBox(height: 20),

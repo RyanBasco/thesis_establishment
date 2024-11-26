@@ -187,13 +187,6 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.notifications,
-                          color: Colors.black, size: 40.sp),
-                      onPressed: () {
-                        // Handle bell icon press
-                      },
-                    ),
                   ],
                 ),
                 SizedBox(height: 15.h),

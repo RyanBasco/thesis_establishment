@@ -150,7 +150,7 @@ class _HistoryState extends State<History> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 80),
                       const Text(
                         'History',
                         style: TextStyle(

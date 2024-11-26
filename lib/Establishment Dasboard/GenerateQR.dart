@@ -6,7 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:saver_gallery/saver_gallery.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 
 class GenerateQR extends StatefulWidget {
@@ -83,13 +83,14 @@ class _GenerateQRState extends State<GenerateQR> {
       final Uint8List? image = await screenshotController.capture();
 
       if (image != null) {
-        final result = await ImageGallerySaver.saveImage(
-          Uint8List.fromList(image),
+        final result = await SaverGallery.saveImage(
+          image,
           quality: 100,
-          name: "QR_Code_${DateTime.now().millisecondsSinceEpoch}",
+          fileName: "QR_Code_${DateTime.now().millisecondsSinceEpoch}",  // Required parameter
+          skipIfExists: false,  // Required parameter, set to `false` to always save
         );
 
-        if (result['isSuccess']) {
+        if (result.isSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("QR code saved to gallery!")),
           );
