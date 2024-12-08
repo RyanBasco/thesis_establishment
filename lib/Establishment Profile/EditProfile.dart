@@ -8,6 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 class EditProfile extends StatefulWidget {
   const EditProfile({Key? key}) : super(key: key);
@@ -137,10 +138,33 @@ class _EditProfileState extends State<EditProfile> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      setState(() {
-        _profileImage = File(image.path);
-      });
-      await _uploadImageToFirebase(image);
+      // Crop the image
+      final croppedImage = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        compressQuality: 100,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            toolbarColor: const Color(0xFF288F13),
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+        ],
+      );
+
+      if (croppedImage != null) {
+        setState(() {
+          _profileImage = File(croppedImage.path);
+        });
+        await _uploadImageToFirebase(XFile(croppedImage.path));
+      }
     }
   }
 

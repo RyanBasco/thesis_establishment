@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Profile/EstabProfile.dart';
 import 'package:thesis_establishment/Spending%20Analysis/Inputvalue.dart';
 
@@ -14,15 +15,36 @@ class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
   String? scannedCode;
   bool _isNavigated = false;
   MobileScannerController scannerController = MobileScannerController();
+  bool isValidQRCode = true; // New variable to track QR code validity
+  bool _isShowingDialog = false; // Add this flag
+
+  void _reinitializeCamera() {
+    try {
+      // Stop and dispose old controller
+      scannerController.stop();
+      scannerController.dispose();
+      // Create and start new controller
+      scannerController = MobileScannerController();
+      if (mounted) {
+        scannerController.start();
+      }
+    } catch (e) {
+      print('Error reinitializing camera: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _reinitializeCamera();
   }
 
   @override
   void dispose() {
+    // Stop the camera before disposing
+    scannerController.stop();
+    // Dispose the controller
     scannerController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -30,12 +52,24 @@ class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle camera lifecycle for better performance
-    if (state == AppLifecycleState.resumed && !_isNavigated) {
-      scannerController.start();
-    } else if (state == AppLifecycleState.paused) {
-      scannerController.stop();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _reinitializeCamera();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        scannerController.stop();
+        break;
+      default:
+        break;
     }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    scannerController.start();
   }
 
   void _onItemTapped(int index) {
@@ -74,7 +108,12 @@ class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
                   children: [
                     GestureDetector(
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DashboardPage(),
+                          ),
+                        );
                       },
                       child: Container(
                         width: 40.w,
@@ -132,33 +171,81 @@ class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(16),
                         child: MobileScanner(
                           controller: scannerController,
+                          errorBuilder: (context, error, child) {
+                            return Center(
+                              child: IconButton(
+                                icon: const Icon(Icons.refresh),
+                                onPressed: _reinitializeCamera,
+                              ),
+                            );
+                          },
                           onDetect: (BarcodeCapture barcodeCapture) {
                             if (_isNavigated) return;
 
-                            final List<Barcode> barcodes = barcodeCapture.barcodes;
+                            final List<Barcode> barcodes =
+                                barcodeCapture.barcodes;
                             for (final barcode in barcodes) {
                               if (barcode.rawValue != null) {
-                                setState(() {
-                                  scannedCode = barcode.rawValue;
-                                  _isNavigated = true;
-                                });
-                                print('QR Code found: $scannedCode');
+                                final scannedValue = barcode.rawValue!;
 
-                                Future.delayed(const Duration(milliseconds: 500), () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          Inputvalue(scannedCode: scannedCode!),
-                                    ),
-                                  ).then((_) {
-                                    setState(() {
-                                      _isNavigated = false;
-                                      scannedCode = null;
-                                      scannerController.start(); // Restart the scanner
+                                // Validate if the scanned value is a Firebase UID (typically 28 characters)
+                                if (scannedValue.length >= 20) {  // Firebase UIDs are long strings
+                                  setState(() {
+                                    scannedCode = scannedValue;
+                                    _isNavigated = true;
+                                    isValidQRCode = true;
+                                  });
+                                  print('Valid QR Code found: $scannedCode');
+
+                                  // Navigate to the next page
+                                  Future.delayed(const Duration(milliseconds: 500), () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => Inputvalue(
+                                          scannedCode: scannedCode!,
+                                        ),
+                                      ),
+                                    ).then((_) {
+                                      setState(() {
+                                        _isNavigated = false;
+                                        scannedCode = null;
+                                        scannerController
+                                            .start(); // Restart the scanner
+                                      });
                                     });
                                   });
-                                });
+                                } else {
+                                  // Invalid QR Code
+                                  if (!_isShowingDialog) {
+                                    setState(() {
+                                      isValidQRCode = false;
+                                      _isShowingDialog = true;
+                                    });
+                                    showDialog(
+                                      context: context,
+                                      builder: (BuildContext context) {
+                                        return AlertDialog(
+                                          title: const Text('Invalid QR Code'),
+                                          content: const Text('Please scan a valid QR code from the application.'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                setState(() {
+                                                  _isShowingDialog = false;
+                                                });
+                                                scannerController.start();
+                                              },
+                                              child: const Text('OK'),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  }
+                                  print('Invalid QR Code scanned');
+                                }
                                 break;
                               }
                             }
@@ -170,7 +257,11 @@ class _ScanQRState extends State<ScanQR> with WidgetsBindingObserver {
                     Align(
                       alignment: Alignment.center,
                       child: Text(
-                        scannedCode == null ? 'Align frame with QR code' : '',
+                        scannedCode == null
+                            ? 'Align frame with a valid QR code'
+                            : isValidQRCode
+                                ? 'Valid QR code scanned!'
+                                : 'Invalid QR code scanned!',
                         style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: 18.sp,

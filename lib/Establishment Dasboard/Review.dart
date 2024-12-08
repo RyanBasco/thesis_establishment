@@ -46,49 +46,57 @@ class _ReviewState extends State<Review> {
 
   // Fetch reviews and count star ratings
   void _fetchReviews() async {
-  if (loggedInDocumentId == null) return; // Ensure document ID is available
+    if (loggedInDocumentId == null) return;
 
-  final snapshot = await _databaseRef.child('reviews').get();
+    final snapshot = await _databaseRef.child('reviews').get();
 
-  if (snapshot.exists) {
-    Map data = snapshot.value as Map;
+    if (snapshot.exists) {
+      Map data = snapshot.value as Map;
 
-    setState(() {
-      starCounts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
-      reviews = [];
+      setState(() {
+        starCounts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+        reviews = [];
 
-      data.forEach((key, value) {
-        final review = Map<String, dynamic>.from(value);
+        data.forEach((key, value) {
+          final review = Map<String, dynamic>.from(value);
+          if (review['establishment_id'] == loggedInDocumentId) {
+            if (review['categoryRatings'] != null) {
+              Map<String, dynamic> categoryRatings = Map<String, dynamic>.from(review['categoryRatings'] as Map);
+              
+              categoryRatings.forEach((category, rating) {
+                // Convert rating to int and validate
+                int ratingValue = rating is int ? rating : (rating as num).toInt();
+                
+                if (ratingValue >= 1 && ratingValue <= 5) {
+                  String firstName = review['first_name'] ?? '';
+                  String lastName = review['last_name'] ?? '';
+                  String comment = review['comment'] ?? '';
+                  int timestamp = review['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
+                  bool isHelpful = review['isHelpful'] ?? false;
 
-        // Only include reviews where establishment_id matches loggedInDocumentId
-        if (review['establishment_id'] == loggedInDocumentId) {
-          int rating = review['rating'];
-          String firstName = review['first_name'] ?? ''; // Fetch first name
-          String lastName = review['last_name'] ?? '';   // Fetch last name
-          String comment = review['comment'] ?? '';
-          int timestamp = review['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
-          bool isHelpful = review['isHelpful'] ?? false;
+                  reviews.add({
+                    'rating': ratingValue,
+                    'category': category,
+                    'firstName': firstName,
+                    'lastName': lastName,
+                    'comment': comment,
+                    'timestamp': timestamp,
+                    'isHelpful': isHelpful,
+                    'reviewKey': key,
+                  });
 
-          reviews.add({
-            'rating': rating,
-            'firstName': firstName,
-            'lastName': lastName,
-            'comment': comment,
-            'timestamp': timestamp,
-            'isHelpful': isHelpful,
-            'reviewKey': key,
-          });
-
-          // Update star counts
-          if (starCounts.containsKey(rating)) {
-            starCounts[rating] = starCounts[rating]! + 1;
+                  // Update star counts
+                  if (starCounts.containsKey(ratingValue)) {
+                    starCounts[ratingValue] = starCounts[ratingValue]! + 1;
+                  }
+                }
+              });
+            }
           }
-        }
+        });
       });
-    });
+    }
   }
-}
-
 
   // Toggle helpful status
   void _toggleHelpful(String reviewKey, bool isHelpful) async {
@@ -212,9 +220,10 @@ Widget _buildSummarySection() {
             ),
             Row(
               children: List.generate(5, (index) {
-                if (index < averageRating.floor()) {
+                double starValue = index + 1.0;
+                if (starValue <= averageRating) {
                   return const Icon(Icons.star, color: Colors.yellow, size: 20.5);
-                } else if (index < averageRating) {
+                } else if (starValue - averageRating < 1 && starValue - averageRating > 0) {
                   return const Icon(Icons.star_half, color: Colors.yellow, size: 20.5);
                 } else {
                   return const Icon(Icons.star_border, color: Colors.grey, size: 20.5);
@@ -292,6 +301,16 @@ Widget _buildSummarySection() {
                 Text(
                   '${review['firstName']} ${review['lastName']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                // Display category
+                Text(
+                  'Category: ${review['category']}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 // Display stars

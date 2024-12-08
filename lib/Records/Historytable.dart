@@ -55,26 +55,30 @@ class _HistoryState extends State<History> {
           double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
           String date = data['Date'] ?? 'Unknown';
           String time = data['Time'] ?? 'Unknown';
+          String displayName = 'Unknown';
 
-          String uid = data['User']?['UID'] ?? 'Unknown';
-          String firstName = 'Unknown';
-          String lastName = 'Unknown';
+          // Check if it's a group visit
+          if (data['Groups'] != null) {
+            displayName = data['Groups']['groupName'] ?? 'Unknown Group';
+          } 
+          // If not a group, it's an individual user
+          else if (data['User'] != null) {
+            String uid = data['User']['UID'] ?? 'Unknown';
+            if (uid != 'Unknown') {
+              DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
+              DatabaseEvent userEvent = await userRef.once();
 
-          if (uid != 'Unknown') {
-            DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
-            DatabaseEvent userEvent = await userRef.once();
-
-            if (userEvent.snapshot.exists) {
-              var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
-              firstName = userData['first_name'] ?? 'Unknown';
-              lastName = userData['last_name'] ?? 'Unknown';
+              if (userEvent.snapshot.exists) {
+                var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+                String firstName = userData['first_name'] ?? 'Unknown';
+                String lastName = userData['last_name'] ?? 'Unknown';
+                displayName = '$firstName $lastName';
+              }
             }
           }
 
-          String fullName = '$firstName $lastName';
-
           records.add({
-            'Name': fullName,
+            'Name': displayName,
             'Category': category,
             'TotalSpend': totalSpend,
             'Date': date,
@@ -82,6 +86,17 @@ class _HistoryState extends State<History> {
           });
         }
       }
+
+      // Sort records by date and time in descending order
+      records.sort((a, b) {
+        // Compare dates first
+        int dateComparison = b['Date'].compareTo(a['Date']);
+        if (dateComparison != 0) {
+          return dateComparison;
+        }
+        // If dates are equal, compare times
+        return b['Time'].compareTo(a['Time']);
+      });
     }
 
     if (mounted) {
@@ -199,7 +214,7 @@ class _HistoryState extends State<History> {
                                       Padding(
                                         padding: EdgeInsets.all(8.0),
                                         child: Text(
-                                          'Name',
+                                          'Name/Group Name',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,

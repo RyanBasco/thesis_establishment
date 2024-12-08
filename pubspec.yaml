@@ -45,6 +45,7 @@ dependencies:
   saver_gallery: ^3.0.10
   screenshot: ^3.0.0
   permission_handler: ^11.3.1
+  dropdown_search: ^5.0.2
 
 
 
