@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
+import 'package:file_picker/file_picker.dart';
 
 class RegisterEstablishmentPage extends StatefulWidget {
   @override
@@ -27,6 +28,8 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+
+  List<PlatformFile> _selectedFiles = [];
 
   // Sub-category options
   final Map<String, List<String>> _subCategoryOptions = {
@@ -59,18 +62,39 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
   }
 
   Future<void> _loadCityAndBarangayData() async {
-    final String cityData = await rootBundle.loadString('assets/city.json');
-    final String barangayData = await rootBundle.loadString('assets/barangay.json');
-    setState(() {
-      _cities = List<Map<String, dynamic>>.from(jsonDecode(cityData) as List);
-      _barangays = List<Map<String, dynamic>>.from(jsonDecode(barangayData) as List);
-    });
+    try {
+      final String cityData = await rootBundle.loadString('assets/city.json');
+      final String barangayData = await rootBundle.loadString('assets/barangay.json');
+      
+      // Decode only the cities with city_code starting with '0679'
+      List<Map<String, dynamic>> guimarasCities = List<Map<String, dynamic>>.from(
+        jsonDecode(cityData) as List
+      ).where((city) => city['city_code'].startsWith('0679')).toList();
+
+      // Store all barangays for later filtering
+      List<Map<String, dynamic>> allBarangays = List<Map<String, dynamic>>.from(
+        jsonDecode(barangayData) as List
+      );
+
+      setState(() {
+        _cities = guimarasCities;
+        _barangays = allBarangays;
+      });
+    } catch (error) {
+      print("An error occurred while loading cities and barangays: $error");
+    }
+  }
+
+  // Add this method to filter barangays based on selected city
+  List<Map<String, dynamic>> _getFilteredBarangays() {
+    if (_city == null) return [];
+    return _barangays.where((barangay) => barangay['city_code'] == _city).toList();
   }
 
   Future<void> _registerEstablishment() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() {
-        _isLoading = true; // Start loading
+        _isLoading = true;
       });
       
       try {
@@ -82,8 +106,8 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
           password: _password!,
         );
 
-        // Save data to Firebase Realtime Database
-        await _db.child('establishments/${userCredential.user?.uid}').set({
+        // Save data to Firebase Realtime Database under pendingEstablishments
+        await _db.child('pendingEstablishments/${userCredential.user?.uid}').set({
           'establishmentName': _establishmentName,
           'tourismType': _tourismType,
           'subCategory': _subCategory,
@@ -91,15 +115,22 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
           'barangay': _barangay,
           'contact': '+63$_contact',
           'email': _email,
+          'status': 'pending',
+          'submissionDate': ServerValue.timestamp,
+          'documents': _selectedFiles.map((file) => {
+            'name': file.name,
+            'size': file.size,
+            'extension': file.extension,
+          }).toList(),
         });
 
-        // Show success dialog and redirect to login
+        // Show success dialog with modified message
         await showDialog(
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('Success'),
-              content: Text('Establishment registered successfully!'),
+              title: Text('Registration Pending'),
+              content: Text('Your establishment registration has been submitted and is pending approval. You will be notified once your registration is approved.'),
               actions: [
                 TextButton(
                   onPressed: () {
@@ -137,7 +168,7 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
         );
       } finally {
         setState(() {
-          _isLoading = false; // Stop loading regardless of success/failure
+          _isLoading = false;
         });
       }
     }
@@ -214,6 +245,19 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
     setState(() {
       _isPasswordVisible = !_isPasswordVisible;
     });
+  }
+
+  Future<void> _pickFiles() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.any,
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedFiles = result.files.take(5).toList();
+      });
+    }
   }
 
   @override
@@ -356,23 +400,25 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
                         // Searchable City Field
                         _buildTextFieldContainer(
                           icon: Icons.location_city,
-                          child: GestureDetector(
-                            onTap: _showCitySearchDialog,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 15.0, horizontal: 12.0),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              child: Text(
-                                _city != null
-                                    ? _cities.firstWhere((city) =>
-                                        city['city_code'] == _city)['city_name']
-                                    : 'Select City',
-                                style: TextStyle(color: Colors.white),
-                              ),
+                          child: DropdownButtonFormField<String>(
+                            decoration: InputDecoration(
+                              labelText: 'City',
+                              labelStyle: TextStyle(color: Colors.white),
+                              border: InputBorder.none,
                             ),
+                            dropdownColor: Color(0xFF288F13),
+                            iconEnabledColor: Colors.white,
+                            style: TextStyle(color: Colors.white),
+                            items: _cities.map((city) => DropdownMenuItem<String>(
+                              value: city['city_code'].toString(),
+                              child: Text(city['city_name'], overflow: TextOverflow.ellipsis),
+                            )).toList(),
+                            onChanged: (value) => setState(() {
+                              _city = value;
+                              _barangay = null; // Reset barangay when city changes
+                            }),
+                            value: _city,
+                            validator: (value) => value == null ? 'Please select a city' : null,
                           ),
                         ),
                         SizedBox(height: 20),
@@ -466,6 +512,27 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
                                 (value != null && value.length >= 6)
                                     ? null
                                     : 'Password must be at least 6 characters long',
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        // File upload field
+                        _buildTextFieldContainer(
+                          icon: Icons.upload_file,
+                          child: GestureDetector(
+                            onTap: _pickFiles,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 12.0),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              child: Text(
+                                _selectedFiles.isNotEmpty
+                                    ? _selectedFiles.map((file) => file.name).join(', ')
+                                    : 'Upload Business Permit or Related Documents (up to 5)',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
                           ),
                         ),
                         SizedBox(height: 40),
