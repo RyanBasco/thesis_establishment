@@ -156,7 +156,10 @@ class _InputvalueState extends State<Inputvalue> {
 
           // Create a timestamp string
           String timestamp = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-
+          
+          // Update date format to mm/dd/yyyy
+          String formattedDate = '${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}/${now.year}';
+          
           // Get selected categories and their values
           List<Map<String, dynamic>> selectedCategories = categoryInputs
               .where((input) => input['selected'])
@@ -186,8 +189,8 @@ class _InputvalueState extends State<Inputvalue> {
               Map<String, dynamic> visitData = {
                 'TotalSpend': totalSpend,
                 'Category': category,
-                'Date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
-                'Time': '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
+                'Date': formattedDate,  // Use the new formatted date
+                'Time': '${now.hour % 12 == 0 ? 12 : now.hour % 12}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}',
                 'Establishment': {
                   'EstablishmentID': establishmentDocID,
                   'email': establishmentDetails['email'],

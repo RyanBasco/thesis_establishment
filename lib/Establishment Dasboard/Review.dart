@@ -10,8 +10,8 @@ class Review extends StatefulWidget {
 
 class _ReviewState extends State<Review> {
   final DatabaseReference _databaseRef = FirebaseDatabase.instance.ref();
-  final FirebaseAuth _auth = FirebaseAuth.instance; // Firebase Auth instance for current user ID
-  String? loggedInDocumentId; // Holds the establishment's document ID from Firebase Database
+  final FirebaseAuth _auth = FirebaseAuth.instance; 
+  String? loggedInDocumentId; 
 
   int _selectedIndex = 0;
   int? _selectedRatingFilter;
@@ -21,21 +21,19 @@ class _ReviewState extends State<Review> {
   @override
   void initState() {
     super.initState();
-    _getLoggedInDocumentId(); // Fetch the document ID on initialization
+    _getLoggedInDocumentId(); 
   }
 
   Future<void> _getLoggedInDocumentId() async {
-    // Get the current user's ID from FirebaseAuth
     String? userId = _auth.currentUser?.uid;
 
     if (userId != null) {
-      // Query the `Establishments` node to retrieve the document ID for the logged-in user
       final snapshot = await _databaseRef.child('establishments/$userId').get();
       if (snapshot.exists) {
         setState(() {
-          loggedInDocumentId = snapshot.key; // Store the document ID of the establishment
+          loggedInDocumentId = snapshot.key; 
         });
-        _fetchReviews(); // Fetch reviews after obtaining the document ID
+        _fetchReviews(); 
       } else {
         print("Establishment document not found for user ID: $userId");
       }
@@ -44,7 +42,6 @@ class _ReviewState extends State<Review> {
     }
   }
 
-  // Fetch reviews and count star ratings
   void _fetchReviews() async {
     if (loggedInDocumentId == null) return;
 
@@ -62,15 +59,17 @@ class _ReviewState extends State<Review> {
           if (review['establishment_id'] == loggedInDocumentId) {
             if (review['categoryRatings'] != null) {
               Map<String, dynamic> categoryRatings = Map<String, dynamic>.from(review['categoryRatings'] as Map);
-              
+              Map<String, dynamic>? categoryComments = review['categoryComments'] != null 
+                  ? Map<String, dynamic>.from(review['categoryComments'] as Map) 
+                  : null;
+
               categoryRatings.forEach((category, rating) {
-                // Convert rating to int and validate
                 int ratingValue = rating is int ? rating : (rating as num).toInt();
                 
                 if (ratingValue >= 1 && ratingValue <= 5) {
                   String firstName = review['first_name'] ?? '';
                   String lastName = review['last_name'] ?? '';
-                  String comment = review['comment'] ?? '';
+                  String comment = categoryComments != null ? categoryComments[category] ?? '' : '';
                   int timestamp = review['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
                   bool isHelpful = review['isHelpful'] ?? false;
 
@@ -85,7 +84,6 @@ class _ReviewState extends State<Review> {
                     'reviewKey': key,
                   });
 
-                  // Update star counts
                   if (starCounts.containsKey(ratingValue)) {
                     starCounts[ratingValue] = starCounts[ratingValue]! + 1;
                   }
@@ -98,13 +96,12 @@ class _ReviewState extends State<Review> {
     }
   }
 
-  // Toggle helpful status
   void _toggleHelpful(String reviewKey, bool isHelpful) async {
     await _databaseRef.child('reviews/$reviewKey').update({'isHelpful': !isHelpful});
-    _fetchReviews(); // Refresh reviews to update UI
+    _fetchReviews(); 
   }
 
-  // Filter reviews by star rating
+ 
   void _filterReviewsByRating(int? rating) {
     setState(() {
       _selectedRatingFilter = rating;
@@ -199,8 +196,7 @@ class _ReviewState extends State<Review> {
     );
   }
 
-  // Summary section with star counts
-  // Summary section with star counts
+
 Widget _buildSummarySection() {
   int totalRatings = starCounts.values.reduce((a, b) => a + b);
   double averageRating = totalRatings > 0
@@ -249,7 +245,6 @@ Widget _buildSummarySection() {
 }
 
 
-  // Helper to create star count row with filter functionality
   Widget _buildStarCountRow(String label, int count, int? ratingFilter) {
     bool isSelected = _selectedRatingFilter == ratingFilter;
     return GestureDetector(
@@ -273,7 +268,7 @@ Widget _buildSummarySection() {
     );
   }
 
-  // Review list section with filter application
+  
   Widget _buildReviewList() {
     List<Map<String, dynamic>> filteredReviews = _selectedRatingFilter == null
         ? reviews
@@ -297,13 +292,13 @@ Widget _buildSummarySection() {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Display user's full name
+            
                 Text(
                   '${review['firstName']} ${review['lastName']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                // Display category
+              
                 Text(
                   'Category: ${review['category']}',
                   style: const TextStyle(
@@ -313,7 +308,7 @@ Widget _buildSummarySection() {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Display stars
+               
                 Row(
                   children: List.generate(5, (index) {
                     return Icon(
@@ -323,7 +318,7 @@ Widget _buildSummarySection() {
                     );
                   }),
                 ),
-                // Display review date
+              
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Text(
@@ -331,12 +326,12 @@ Widget _buildSummarySection() {
                     style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                 ),
-                // Display comment
+           
                 Text(
                   review['comment'] ?? '',
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
-                // Helpful button
+        
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(

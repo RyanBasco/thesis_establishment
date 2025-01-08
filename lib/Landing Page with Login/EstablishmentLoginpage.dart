@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/Dashboard.dart';
 import 'package:thesis_establishment/Establishment%20Dasboard/ServiceOffered.dart';
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentSignup.dart';
+import 'package:thesis_establishment/Landing%20Page%20with%20Login/PendingEstablishmentPage.dart';
 
 class EstablishmentLogin extends StatefulWidget {
   @override
@@ -25,9 +26,27 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
     });
 
     try {
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      DatabaseReference pendingRef = FirebaseDatabase.instance.ref('pendingEstablishments');
+      DatabaseEvent pendingEvent =
+          await pendingRef.orderByChild('email').equalTo(_emailController.text.trim()).once();
+
+      if (pendingEvent.snapshot.exists) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => PendingEstablishmentPage()),
+        );
+        return;
+      }
+
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
       DatabaseEvent event =
-          await dbRef.orderByChild('email').equalTo(_emailController.text).once();
+          await dbRef.orderByChild('email').equalTo(_emailController.text.trim()).once();
 
       if (!event.snapshot.exists) {
         setState(() {
@@ -36,12 +55,6 @@ class _EstablishmentLoginState extends State<EstablishmentLogin> {
         });
         return;
       }
-
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
 
       final establishmentKey = event.snapshot.children.first.key;
       final servicesRef = dbRef.child(establishmentKey!).child("Services");

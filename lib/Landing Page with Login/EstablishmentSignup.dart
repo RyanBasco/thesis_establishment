@@ -5,6 +5,10 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:thesis_establishment/Landing%20Page%20with%20Login/EstablishmentLoginpage.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:intl/intl.dart';
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterEstablishmentPage extends StatefulWidget {
   @override
@@ -25,13 +29,14 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
   String? _contact;
   String? _email;
   String? _password;
+  String? _streetAddress;
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
   List<PlatformFile> _selectedFiles = [];
 
-  // Sub-category options
+
   final Map<String, List<String>> _subCategoryOptions = {
     'primary': [
       'Accommodation Establishments',
@@ -93,6 +98,26 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
 
   Future<void> _registerEstablishment() async {
     if (_formKey.currentState?.validate() ?? false) {
+      // Check if files are selected
+      if (_selectedFiles.isEmpty) {
+        // Show error dialog if no files are uploaded
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text('Error'),
+              content: Text('Please upload your Business Permit or related documents.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+        return; // Exit the method if no files are uploaded
+      }
       setState(() {
         _isLoading = true;
       });
@@ -106,25 +131,37 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
           password: _password!,
         );
 
-        // Save data to Firebase Realtime Database under pendingEstablishments
+        // Store documents in Firebase Storage
+        List<String> documentUrls = [];
+        for (var file in _selectedFiles) {
+          // Create a reference to the storage location with user ID
+          final storageRef = FirebaseStorage.instance.ref().child('Documents/${userCredential.user?.uid}/${file.name}');
+          // Upload the file
+          await storageRef.putFile(File(file.path!));
+          // Get the download URL
+          String documentUrl = await storageRef.getDownloadURL();
+          documentUrls.add(documentUrl);
+        }
+
+        // Format submission date
+        String submissionDate = DateFormat('MM/dd/yy').format(DateTime.now());
+
+        // Store the document URLs in Firebase Realtime Database
         await _db.child('pendingEstablishments/${userCredential.user?.uid}').set({
           'establishmentName': _establishmentName,
           'tourismType': _tourismType,
           'subCategory': _subCategory,
           'city': _city,
           'barangay': _barangay,
+          'streetAddress': _streetAddress?.isEmpty == true ? 'N/A' : _streetAddress,
           'contact': '+63$_contact',
           'email': _email,
           'status': 'pending',
-          'submissionDate': ServerValue.timestamp,
-          'documents': _selectedFiles.map((file) => {
-            'name': file.name,
-            'size': file.size,
-            'extension': file.extension,
-          }).toList(),
+          'submissionDate': submissionDate,
+          'document': documentUrls,
         });
 
-        // Show success dialog with modified message
+        // Show success dialog
         await showDialog(
           context: context,
           builder: (BuildContext context) {
@@ -166,6 +203,7 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
             );
           },
         );
+        print("Error during registration: $e");
       } finally {
         setState(() {
           _isLoading = false;
@@ -255,7 +293,7 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
 
     if (result != null) {
       setState(() {
-        _selectedFiles = result.files.take(5).toList();
+        _selectedFiles = result.files.take(3).toList();
       });
     }
   }
@@ -342,11 +380,11 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
                             items: const [
                               DropdownMenuItem(
                                 value: 'primary',
-                                child: Text('primary'),
+                                child: Text('Primary'),
                               ),
                               DropdownMenuItem(
                                 value: 'secondary',
-                                child: Text('secondary'),
+                                child: Text('Secondary'),
                               ),
                             ],
                             onChanged: (value) {
@@ -451,6 +489,19 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
                         ),
                         SizedBox(height: 20),
                         _buildTextFieldContainer(
+                          icon: Icons.location_on,
+                          child: TextFormField(
+                            decoration: InputDecoration(
+                              labelText: 'Street Address',
+                              labelStyle: TextStyle(color: Colors.white),
+                              border: InputBorder.none,
+                            ),
+                            style: TextStyle(color: Colors.white),
+                            onSaved: (value) => _streetAddress = value,
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        _buildTextFieldContainer(
                           icon: Icons.phone,
                           child: TextFormField(
                             decoration: InputDecoration(
@@ -529,7 +580,7 @@ class _RegisterEstablishmentPageState extends State<RegisterEstablishmentPage> {
                               child: Text(
                                 _selectedFiles.isNotEmpty
                                     ? _selectedFiles.map((file) => file.name).join(', ')
-                                    : 'Upload Business Permit or Related Documents (up to 5)',
+                                    : 'Upload Business Permit or Related Documents (up to 3)',
                                 style: TextStyle(color: Colors.white),
                               ),
                             ),
