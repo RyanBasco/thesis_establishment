@@ -44,11 +44,14 @@ class _AnalyticsState extends State<Analytics> {
 
   Future<void> fetchEstablishmentDocId() async {
     DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-    DatabaseEvent establishmentEvent = await dbRef.orderByChild('email').equalTo(userEmail).once();
+    DatabaseEvent establishmentEvent =
+        await dbRef.orderByChild('email').equalTo(userEmail).once();
 
     if (establishmentEvent.snapshot.exists) {
-      var establishmentData = Map<String, dynamic>.from(establishmentEvent.snapshot.value as Map);
-      var firstRecord = establishmentData.keys.first; // Get the first matching key as document ID
+      var establishmentData =
+          Map<String, dynamic>.from(establishmentEvent.snapshot.value as Map);
+      var firstRecord = establishmentData
+          .keys.first; // Get the first matching key as document ID
 
       setState(() {
         establishmentDocId = firstRecord;
@@ -67,114 +70,124 @@ class _AnalyticsState extends State<Analytics> {
   }
 
   Future<void> fetchTotalSpendData() async {
-  if (establishmentDocId == null) return;
+    if (establishmentDocId == null) return;
 
-  DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
-  DatabaseEvent visitsEvent = await visitsRef.once();
+    DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
+    DatabaseEvent visitsEvent = await visitsRef.once();
 
-  Map<String, double> spendByDate = {}; // Map to aggregate spend by date
+    Map<String, double> spendByDate = {};
+    DateTime now = DateTime.now();
 
-  if (visitsEvent.snapshot.exists) {
-    var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
+    if (visitsEvent.snapshot.exists) {
+      var visitsData =
+          Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-    for (var entry in visitsData.entries) {
-      var data = Map<String, dynamic>.from(entry.value);
+      for (var entry in visitsData.entries) {
+        var data = Map<String, dynamic>.from(entry.value);
 
-      // Check if 'Establishment' subfield exists and contains 'EstablishmentID'
-      if (data['Establishment'] != null &&
-          data['Establishment']['EstablishmentID'] == establishmentDocId) {
-        
-        double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+        if (data['Establishment'] != null &&
+            data['Establishment']['EstablishmentID'] == establishmentDocId) {
+          double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
 
-        DateTime date;
-        if (data['Date'] is String) {
-          String dateString = data['Date'];
-          try {
-            date = DateFormat('yyyy-MM-dd').parse(dateString);
-          } catch (e) {
-            date = DateTime.now();
-          }
-        } else {
-          date = DateTime.now();
-        }
-
-        String formattedDate;
-        if (selectedOption == 'Yearly') {
-          formattedDate = DateFormat('yyyy').format(date);
-        } else if (selectedOption == 'Monthly') {
-          formattedDate = DateFormat('MMMM yyyy').format(date);
-        } else if (selectedOption == 'Weekly') {
-          int weekNumber = getWeekOfYear(date);
-          formattedDate = 'Week $weekNumber, ${date.year}';
-        } else if (selectedOption == 'Daily') {
-          if (date.day == DateTime.now().day &&
-              date.month == DateTime.now().month &&
-              date.year == DateTime.now().year) {
-            formattedDate = DateFormat('MMMM dd, yyyy').format(date);
+          DateTime date;
+          if (data['Date'] is String) {
+            try {
+              date = DateFormat('MM/dd/yyyy').parse(data['Date']);
+            } catch (e) {
+              try {
+                date = DateFormat('yyyy-MM-dd').parse(data['Date']);
+              } catch (e) {
+                continue; // Skip invalid dates
+              }
+            }
           } else {
-            continue;
+            continue; // Skip if date is not a string
           }
-        } else {
-          formattedDate = DateFormat('MMMM dd, yyyy').format(date);
-        }
 
-        if (spendByDate.containsKey(formattedDate)) {
-          spendByDate[formattedDate] = spendByDate[formattedDate]! + totalSpend;
-        } else {
-          spendByDate[formattedDate] = totalSpend;
+          // Filter based on selected time period
+          bool includeData = false;
+          String formattedDate = '';
+
+          if (selectedOption == 'Yearly') {
+            // Include data from all years
+            formattedDate = DateFormat('yyyy').format(date);
+            includeData = true;
+          } else if (selectedOption == 'Monthly') {
+            // Include all months from all years
+            formattedDate = DateFormat('MMMM yyyy').format(date);
+            includeData = true;
+          } else if (selectedOption == 'Weekly') {
+            // Include all weeks from all years
+            int weekNumber = getWeekOfYear(date);
+            formattedDate = 'Week $weekNumber, ${date.year}';
+            includeData = true;
+          } else if (selectedOption == 'Daily') {
+            // Include data from current day only
+            if (date.year == now.year &&
+                date.month == now.month &&
+                date.day == now.day) {
+              formattedDate = DateFormat('MMMM dd, yyyy').format(date);
+              includeData = true;
+            }
+          }
+
+          if (includeData) {
+            if (spendByDate.containsKey(formattedDate)) {
+              spendByDate[formattedDate] =
+                  spendByDate[formattedDate]! + totalSpend;
+            } else {
+              spendByDate[formattedDate] = totalSpend;
+            }
+          }
         }
       }
     }
+
+    // Convert spendByDate map to a sorted list of ChartData
+    List<ChartData> fetchedData = spendByDate.entries
+        .map((entry) => ChartData(entry.key, entry.value))
+        .toList();
+
+    // Sort the data based on date
+    fetchedData.sort((a, b) {
+      DateTime dateA, dateB;
+      try {
+        if (selectedOption == 'Yearly') {
+          dateA = DateFormat('yyyy').parse(a.xValue);
+          dateB = DateFormat('yyyy').parse(b.xValue);
+        } else if (selectedOption == 'Monthly') {
+          dateA = DateFormat('MMMM yyyy').parse(a.xValue);
+          dateB = DateFormat('MMMM yyyy').parse(b.xValue);
+        } else if (selectedOption == 'Weekly') {
+          final weekPattern = RegExp(r'Week (\d+), (\d{4})');
+          final matchA = weekPattern.firstMatch(a.xValue);
+          final matchB = weekPattern.firstMatch(b.xValue);
+
+          if (matchA != null && matchB != null) {
+            int weekA = int.parse(matchA.group(1)!);
+            int yearA = int.parse(matchA.group(2)!);
+            int weekB = int.parse(matchB.group(1)!);
+            int yearB = int.parse(matchB.group(2)!);
+
+            if (yearA != yearB) return yearA.compareTo(yearB);
+            return weekA.compareTo(weekB);
+          }
+          return 0;
+        } else {
+          dateA = DateFormat('MMMM dd, yyyy').parse(a.xValue);
+          dateB = DateFormat('MMMM dd, yyyy').parse(b.xValue);
+        }
+        return dateA.compareTo(dateB);
+      } catch (e) {
+        return 0;
+      }
+    });
+
+    setState(() {
+      chartData = fetchedData;
+      isLoading = false;
+    });
   }
-
-  // Convert spendByDate map to a sorted list of ChartData
-  List<ChartData> fetchedData = spendByDate.entries
-      .map((entry) => ChartData(entry.key, entry.value))
-      .toList();
-
-  // Sort the list based on date parsing according to selectedOption
-  fetchedData.sort((a, b) {
-    DateTime dateA, dateB;
-    try {
-      if (selectedOption == 'Yearly') {
-        dateA = DateFormat('yyyy').parse(a.xValue);
-        dateB = DateFormat('yyyy').parse(b.xValue);
-      } else if (selectedOption == 'Monthly') {
-        dateA = DateFormat('MMMM yyyy').parse(a.xValue);
-        dateB = DateFormat('MMMM yyyy').parse(b.xValue);
-      } else if (selectedOption == 'Weekly') {
-        final weekPattern = RegExp(r'Week (\d+), (\d{4})');
-        final matchA = weekPattern.firstMatch(a.xValue);
-        final matchB = weekPattern.firstMatch(b.xValue);
-
-        if (matchA != null && matchB != null) {
-          int weekA = int.parse(matchA.group(1)!);
-          int yearA = int.parse(matchA.group(2)!);
-          dateA = DateTime(yearA, 1, 1).add(Duration(days: (weekA - 1) * 7));
-
-          int weekB = int.parse(matchB.group(1)!);
-          int yearB = int.parse(matchB.group(2)!);
-          dateB = DateTime(yearB, 1, 1).add(Duration(days: (weekB - 1) * 7));
-        } else {
-          return 0; // In case of format issues, keep order as is
-        }
-      } else {
-        dateA = DateFormat('MMMM dd, yyyy').parse(a.xValue);
-        dateB = DateFormat('MMMM dd, yyyy').parse(b.xValue);
-      }
-    } catch (e) {
-      return 0; // If parsing fails, maintain order as is
-    }
-    return dateA.compareTo(dateB);
-  });
-
-  setState(() {
-    chartData = fetchedData;
-    isLoading = false;
-  });
-}
-
-
 
   void _onItemTapped(int index) {
     setState(() {
@@ -233,7 +246,8 @@ class _AnalyticsState extends State<Analytics> {
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.arrow_back, color: Colors.black),
+                        child:
+                            const Icon(Icons.arrow_back, color: Colors.black),
                       ),
                     ),
                     const SizedBox(width: 95),
@@ -299,14 +313,17 @@ class _AnalyticsState extends State<Analytics> {
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : chartData.isEmpty
-                            ? const Center(child: Text('No data available for this user'))
+                            ? const Center(
+                                child: Text('No data available for this user'))
                             : SfCartesianChart(
                                 primaryXAxis: CategoryAxis(),
                                 series: <CartesianSeries>[
                                   ColumnSeries<ChartData, String>(
                                     dataSource: chartData,
-                                    xValueMapper: (ChartData data, _) => data.xValue,
-                                    yValueMapper: (ChartData data, _) => data.yValue,
+                                    xValueMapper: (ChartData data, _) =>
+                                        data.xValue,
+                                    yValueMapper: (ChartData data, _) =>
+                                        data.yValue,
                                     color: const Color(0xFF288F13),
                                     width: 0.5,
                                   ),
@@ -360,10 +377,14 @@ class _AnalyticsState extends State<Analytics> {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         margin: const EdgeInsets.only(left: 8),
         decoration: BoxDecoration(
-          color: selectedOption == option ? const Color(0xFF288F13) : Colors.transparent,
+          color: selectedOption == option
+              ? const Color(0xFF288F13)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selectedOption == option ? const Color(0xFF288F13) : Colors.black,
+            color: selectedOption == option
+                ? const Color(0xFF288F13)
+                : Colors.black,
           ),
         ),
         child: Text(

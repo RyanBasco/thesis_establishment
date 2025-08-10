@@ -24,7 +24,8 @@ class _HistoryState extends State<History> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       DatabaseReference dbRef = FirebaseDatabase.instance.ref('establishments');
-      DatabaseEvent event = await dbRef.orderByChild('email').equalTo(user.email).once();
+      DatabaseEvent event =
+          await dbRef.orderByChild('email').equalTo(user.email).once();
 
       if (event.snapshot.exists) {
         var data = Map<String, dynamic>.from(event.snapshot.value as Map);
@@ -38,72 +39,142 @@ class _HistoryState extends State<History> {
     if (userDocId == null) return;
 
     DatabaseReference visitsRef = FirebaseDatabase.instance.ref('Visits');
-    DatabaseEvent visitsEvent = await visitsRef.once();
 
-    List<Map<String, dynamic>> records = [];
+    // Query with orderByChild to sort by date in descending order
+    Query query = visitsRef.orderByChild('Date');
 
-    if (visitsEvent.snapshot.exists) {
-      var visitsData = Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
+    try {
+      DatabaseEvent visitsEvent = await query.once();
+      List<Map<String, dynamic>> records = [];
 
-      for (var entry in visitsData.entries) {
-        var data = Map<String, dynamic>.from(entry.value);
+      if (visitsEvent.snapshot.exists) {
+        var visitsData =
+            Map<String, dynamic>.from(visitsEvent.snapshot.value as Map);
 
-        if (data['Establishment'] != null &&
-            data['Establishment']['EstablishmentID'] == userDocId) {
+        // Pre-fetch all user data to avoid multiple database calls
+        Map<String, Map<String, dynamic>> userDataCache = {};
+        Set<String> userIds = {};
 
-          String category = data['Category'] ?? 'N/A';
-          double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
-          String date = data['Date'] ?? 'Unknown';
-          String time = data['Time'] ?? 'Unknown';
-          String displayName = 'Unknown';
+        // First pass: collect all user IDs
+        for (var entry in visitsData.entries) {
+          var data = Map<String, dynamic>.from(entry.value);
+          if (data['User'] != null && data['User']['UID'] != null) {
+            userIds.add(data['User']['UID']);
+          }
+        }
 
-          // Check if it's a group visit
-          if (data['Groups'] != null) {
-            displayName = data['Groups']['groupName'] ?? 'Unknown Group';
-          } 
-          // If not a group, it's an individual user
-          else if (data['User'] != null) {
-            String uid = data['User']['UID'] ?? 'Unknown';
-            if (uid != 'Unknown') {
-              DatabaseReference userRef = FirebaseDatabase.instance.ref('Users/$uid');
-              DatabaseEvent userEvent = await userRef.once();
+        // Batch fetch user data
+        if (userIds.isNotEmpty) {
+          for (String uid in userIds) {
+            DatabaseReference userRef =
+                FirebaseDatabase.instance.ref('Users/$uid');
+            DatabaseEvent userEvent = await userRef.once();
+            if (userEvent.snapshot.exists) {
+              userDataCache[uid] =
+                  Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+            }
+          }
+        }
 
-              if (userEvent.snapshot.exists) {
-                var userData = Map<String, dynamic>.from(userEvent.snapshot.value as Map);
+        // Process visits data using cached user information
+        visitsData.forEach((key, value) {
+          var data = Map<String, dynamic>.from(value);
+
+          if (data['Establishment'] != null &&
+              data['Establishment']['EstablishmentID'] == userDocId) {
+            String category = data['Category'] ?? 'N/A';
+            double totalSpend = (data['TotalSpend'] ?? 0).toDouble();
+            String date = data['Date'] ?? 'Unknown';
+            String time = data['Time'] ?? 'Unknown';
+            String displayName = 'Unknown';
+
+            // Check if it's a group visit
+            if (data['Groups'] != null) {
+              displayName = data['Groups']['groupName'] ?? 'Unknown Group';
+            }
+            // If not a group, use cached user data
+            else if (data['User'] != null) {
+              String uid = data['User']['UID'] ?? 'Unknown';
+              if (userDataCache.containsKey(uid)) {
+                var userData = userDataCache[uid]!;
                 String firstName = userData['first_name'] ?? 'Unknown';
                 String lastName = userData['last_name'] ?? 'Unknown';
                 displayName = '$firstName $lastName';
               }
             }
+
+            records.add({
+              'Name': displayName,
+              'Category': category,
+              'TotalSpend': totalSpend,
+              'Date': date,
+              'Time': time,
+            });
+          }
+        });
+
+        // Sort records by date and time in descending order
+        records.sort((a, b) {
+          // Parse dates for proper comparison
+          DateTime dateA = _parseDate(a['Date'].toString());
+          DateTime dateB = _parseDate(b['Date'].toString());
+
+          int dateComparison = dateB.compareTo(dateA);
+          if (dateComparison != 0) {
+            return dateComparison;
           }
 
-          records.add({
-            'Name': displayName,
-            'Category': category,
-            'TotalSpend': totalSpend,
-            'Date': date,
-            'Time': time,
-          });
-        }
+          // Parse times for proper comparison
+          return _compareTime(b['Time'].toString(), a['Time'].toString());
+        });
+
+        setState(() {
+          visitRecords = records;
+        });
       }
+    } catch (e) {
+      print('Error fetching visit records: $e');
+    }
+  }
 
-      // Sort records by date and time in descending order
-      records.sort((a, b) {
-        // Compare dates first
-        int dateComparison = b['Date'].compareTo(a['Date']);
-        if (dateComparison != 0) {
-          return dateComparison;
-        }
-        // If dates are equal, compare times
-        return b['Time'].compareTo(a['Time']);
-      });
+  DateTime _parseDate(String date) {
+    List<String> parts = date.split('/');
+    if (parts.length == 3) {
+      return DateTime(
+        int.parse(parts[2]), // year
+        int.parse(parts[0]), // month
+        int.parse(parts[1]), // day
+      );
+    }
+    return DateTime(1900); // fallback date for invalid format
+  }
+
+  int _compareTime(String time1, String time2) {
+    List<String> parts1 = time1.split(' ');
+    List<String> parts2 = time2.split(' ');
+
+    if (parts1.length != 2 || parts2.length != 2) return 0;
+
+    DateTime time1Parsed = _parseTime(parts1[0], parts1[1]);
+    DateTime time2Parsed = _parseTime(parts2[0], parts2[1]);
+
+    return time1Parsed.compareTo(time2Parsed);
+  }
+
+  DateTime _parseTime(String time, String period) {
+    List<String> parts = time.split(':');
+    if (parts.length != 2) return DateTime(2000);
+
+    int hour = int.parse(parts[0]);
+    int minute = int.parse(parts[1]);
+
+    if (period.toUpperCase() == 'PM' && hour != 12) {
+      hour += 12;
+    } else if (period.toUpperCase() == 'AM' && hour == 12) {
+      hour = 0;
     }
 
-    if (mounted) {
-      setState(() {
-        visitRecords = records;
-      });
-    }
+    return DateTime(2000, 1, 1, hour, minute);
   }
 
   void _onItemTapped(int index) {
@@ -140,7 +211,8 @@ class _HistoryState extends State<History> {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 40.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -196,8 +268,10 @@ class _HistoryState extends State<History> {
                               padding: const EdgeInsets.all(8.0),
                               child: Table(
                                 border: TableBorder(
-                                  horizontalInside: BorderSide(color: Colors.black12, width: 1),
-                                  verticalInside: BorderSide(color: Colors.black12, width: 1),
+                                  horizontalInside: BorderSide(
+                                      color: Colors.black12, width: 1),
+                                  verticalInside: BorderSide(
+                                      color: Colors.black12, width: 1),
                                 ),
                                 columnWidths: const {
                                   0: FlexColumnWidth(2),
@@ -253,7 +327,9 @@ class _HistoryState extends State<History> {
                                       Map<String, dynamic> record = entry.value;
                                       return TableRow(
                                         decoration: BoxDecoration(
-                                          color: index.isEven ? Colors.grey[200] : Colors.white,
+                                          color: index.isEven
+                                              ? Colors.grey[200]
+                                              : Colors.white,
                                         ),
                                         children: [
                                           TableCell(
@@ -262,10 +338,13 @@ class _HistoryState extends State<History> {
                                                 Navigator.push(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (context) => Records(
+                                                    builder: (context) =>
+                                                        Records(
                                                       name: record['Name'],
-                                                      category: record['Category'],
-                                                      totalSpend: record['TotalSpend'],
+                                                      category:
+                                                          record['Category'],
+                                                      totalSpend:
+                                                          record['TotalSpend'],
                                                       date: record['Date'],
                                                       time: record['Time'],
                                                     ),
@@ -273,7 +352,8 @@ class _HistoryState extends State<History> {
                                                 );
                                               },
                                               child: Padding(
-                                                padding: const EdgeInsets.all(8.0),
+                                                padding:
+                                                    const EdgeInsets.all(8.0),
                                                 child: Text(
                                                   record['Name'] ?? 'Unknown',
                                                   textAlign: TextAlign.center,
@@ -283,7 +363,8 @@ class _HistoryState extends State<History> {
                                           ),
                                           TableCell(
                                             child: Padding(
-                                              padding: const EdgeInsets.all(8.0),
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
                                               child: Text(
                                                 record['Category'],
                                                 textAlign: TextAlign.center,
@@ -292,7 +373,8 @@ class _HistoryState extends State<History> {
                                           ),
                                           TableCell(
                                             child: Padding(
-                                              padding: const EdgeInsets.all(8.0),
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
                                               child: Text(
                                                 '₱${record['TotalSpend'].toStringAsFixed(2)}',
                                                 textAlign: TextAlign.center,

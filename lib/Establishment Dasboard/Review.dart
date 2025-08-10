@@ -15,6 +15,7 @@ class _ReviewState extends State<Review> {
 
   int _selectedIndex = 0;
   int? _selectedRatingFilter;
+  String? _selectedCategoryFilter;
   Map<int, int> starCounts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
   List<Map<String, dynamic>> reviews = [];
 
@@ -70,7 +71,7 @@ class _ReviewState extends State<Review> {
                   String firstName = review['first_name'] ?? '';
                   String lastName = review['last_name'] ?? '';
                   String comment = categoryComments != null ? categoryComments[category] ?? '' : '';
-                  int timestamp = review['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
+                  String date = review['date'] ?? DateTime.now().toString();
                   bool isHelpful = review['isHelpful'] ?? false;
 
                   reviews.add({
@@ -79,7 +80,7 @@ class _ReviewState extends State<Review> {
                     'firstName': firstName,
                     'lastName': lastName,
                     'comment': comment,
-                    'timestamp': timestamp,
+                    'date': date,
                     'isHelpful': isHelpful,
                     'reviewKey': key,
                   });
@@ -101,12 +102,18 @@ class _ReviewState extends State<Review> {
     _fetchReviews(); 
   }
 
- 
   void _filterReviewsByRating(int? rating) {
     setState(() {
       _selectedRatingFilter = rating;
     });
   }
+
+  void _filterReviewsByCategory(String? category) {
+  setState(() {
+    // If the same category is clicked, reset the filter.
+    _selectedCategoryFilter = (_selectedCategoryFilter == category) ? null : category;
+  });
+}
 
   void _onItemTapped(int index) {
     setState(() {
@@ -163,6 +170,7 @@ class _ReviewState extends State<Review> {
           children: [
             _buildSummarySection(),
             const Divider(color: Colors.grey, height: 40, thickness: 1),
+            _buildCategoryDropdown(), // Added Category Dropdown here
             _buildReviewList(),
           ],
         ),
@@ -196,88 +204,146 @@ class _ReviewState extends State<Review> {
     );
   }
 
+  Widget _buildSummarySection() {
+    int totalRatings = starCounts.values.reduce((a, b) => a + b);
+    double averageRating = totalRatings > 0
+        ? (starCounts.entries.fold(0, (sum, entry) => sum + entry.key * entry.value) / totalRatings)
+        : 0.0;
 
-Widget _buildSummarySection() {
-  int totalRatings = starCounts.values.reduce((a, b) => a + b);
-  double averageRating = totalRatings > 0
-      ? (starCounts.entries.fold(0, (sum, entry) => sum + entry.key * entry.value) / totalRatings)
-      : 0.0;
-
-  return Padding(
-    padding: const EdgeInsets.all(20.0),
-    child: Row(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              averageRating.toStringAsFixed(1),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
-            ),
-            Row(
-              children: List.generate(5, (index) {
-                double starValue = index + 1.0;
-                if (starValue <= averageRating) {
-                  return const Icon(Icons.star, color: Colors.yellow, size: 20.5);
-                } else if (starValue - averageRating < 1 && starValue - averageRating > 0) {
-                  return const Icon(Icons.star_half, color: Colors.yellow, size: 20.5);
-                } else {
-                  return const Icon(Icons.star_border, color: Colors.grey, size: 20.5);
-                }
-              }),
-            ),
-          ],
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                averageRating.toStringAsFixed(1),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
+              ),
+              Row(
+                children: List.generate(5, (index) {
+                  double starValue = index + 1.0;
+                  if (starValue <= averageRating) {
+                    return const Icon(Icons.star, color: Colors.yellow, size: 20.5);
+                  } else if (starValue - averageRating < 1 && starValue - averageRating > 0) {
+                    return const Icon(Icons.star_half, color: Colors.yellow, size: 20.5);
+                  } else {
+                    return const Icon(Icons.star_border, color: Colors.grey, size: 20.5);
+                  }
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(width: 20),
+          Column(
+            children: [
+              _buildStarCountRow('All', totalRatings, null),
+              _buildStarCountRow('5 Star', starCounts[5]!, 5),
+              _buildStarCountRow('4 Star', starCounts[4]!, 4),
+              _buildStarCountRow('3 Star', starCounts[3]!, 3),
+              _buildStarCountRow('2 Star', starCounts[2]!, 2),
+              _buildStarCountRow('1 Star', starCounts[1]!, 1),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+Widget _buildStarCountRow(String label, int count, int? ratingFilter) {
+  bool isSelected = _selectedRatingFilter == ratingFilter;
+  return GestureDetector(
+    onTap: () => _filterReviewsByRating(ratingFilter),
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      width: 140,
+      height: 40,
+      decoration: BoxDecoration(
+        color: isSelected ? Color(0xFF288F13) : Colors.white,
+        border: Border.all(color: Color(0xFF288F13), width: 2),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 5,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          '$label ($count)',
+          style: TextStyle(color: isSelected ? Colors.white : Colors.black),
         ),
-        const SizedBox(width: 20),
-        Column(
-          children: [
-            _buildStarCountRow('All', totalRatings, null),
-            _buildStarCountRow('5 Star', starCounts[5]!, 5),
-            _buildStarCountRow('4 Star', starCounts[4]!, 4),
-            _buildStarCountRow('3 Star', starCounts[3]!, 3),
-            _buildStarCountRow('2 Star', starCounts[2]!, 2),
-            _buildStarCountRow('1 Star', starCounts[1]!, 1),
-          ],
-        ),
-      ],
+      ),
     ),
   );
 }
 
+  // Category dropdown filter widget
+  Widget _buildCategoryDropdown() {
+  const categories = [
+    'Accommodation',
+    'Food and Beverages',
+    'Transportation',
+    'Attractions and Activities',
+    'Shopping',
+    'Entertainment',
+    'Wellness and Spa Services',
+    'Adventure and Outdoor Activities',
+    'Travel Insurance',
+    'Local Tours and Guides'
+  ];
 
-  Widget _buildStarCountRow(String label, int count, int? ratingFilter) {
-    bool isSelected = _selectedRatingFilter == ratingFilter;
-    return GestureDetector(
-      onTap: () => _filterReviewsByRating(ratingFilter),
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        width: 140,
-        height: 40,
-        decoration: BoxDecoration(
-          color: isSelected ? Color(0xFF288F13) : Colors.white,
-          border: Border.all(color: Color(0xFF288F13), width: 2),
-        ),
-        child: Center(
-          child: Text(
-            '$label ($count)',
-            style: TextStyle(color: isSelected ? Colors.white : Colors.black),
+  return Padding(
+    padding: const EdgeInsets.all(16.0),
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: const Text('Filter by Category'),
           ),
+          value: _selectedCategoryFilter,
+          onChanged: (String? newValue) {
+            _filterReviewsByCategory(newValue);
+          },
+          items: categories.map((category) {
+            return DropdownMenuItem<String>(
+              value: category,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: Text(category),
+              ),
+            );
+          }).toList(),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  
-  Widget _buildReviewList() {
+ Widget _buildReviewList() {
     List<Map<String, dynamic>> filteredReviews = _selectedRatingFilter == null
         ? reviews
         : reviews.where((review) => review['rating'] == _selectedRatingFilter).toList();
 
+    if (_selectedCategoryFilter != null) {
+      filteredReviews = filteredReviews.where((review) => review['category'] == _selectedCategoryFilter).toList();
+    }
+
     return Column(
       children: filteredReviews.map((review) {
-        DateTime date = DateTime.fromMillisecondsSinceEpoch(review['timestamp']);
-        String formattedDate = DateFormat.yMMMd().add_jm().format(date);
+        // Parse the date string and format it to only show MM/dd/yyyy
+        String dateStr = review['date'];
+        String formattedDate = dateStr.split(' ')[0]; // This will take only the date part before the time
         bool isHelpful = review['isHelpful'] ?? false;
 
         return Padding(
@@ -292,13 +358,11 @@ Widget _buildSummarySection() {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            
                 Text(
                   '${review['firstName']} ${review['lastName']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-              
                 Text(
                   'Category: ${review['category']}',
                   style: const TextStyle(
@@ -308,7 +372,6 @@ Widget _buildSummarySection() {
                   ),
                 ),
                 const SizedBox(height: 8),
-               
                 Row(
                   children: List.generate(5, (index) {
                     return Icon(
@@ -318,7 +381,6 @@ Widget _buildSummarySection() {
                     );
                   }),
                 ),
-              
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Text(
@@ -326,12 +388,10 @@ Widget _buildSummarySection() {
                     style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                 ),
-           
                 Text(
                   review['comment'] ?? '',
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                 ),
-        
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(

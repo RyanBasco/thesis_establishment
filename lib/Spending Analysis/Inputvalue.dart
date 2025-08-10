@@ -263,9 +263,11 @@ class _InputvalueState extends State<Inputvalue> {
         const SnackBar(content: Text('User not found.')),
       );
     }
-    setState(() {
-      isLoading = false;
-    });
+    if (mounted) {  // Add mounted check before setState
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
